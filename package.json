@@ -1,0 +1,19 @@
+{
+  "name": "clean-domain-driven",
+  "version": "1.0.0",
+  "description": "This project aims to provide you with recommendations in regards of DDD and Clean Architecture.",
+  "license": "UNLICENSED",
+  "author": "Pierre Martin",
+  "private": true,
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.15"
+  },
+  "dependencies": {
+    "uuid": "^13.0.0"
+  }
+}
