@@ -57,17 +57,27 @@ const bad  = ISBN.create('invalid');         // throws ISBNMustBeExactly13Digits
 
 Each VO provides `equals()` for comparison — no primitive comparisons leaking out.
 
-See: [`isbn.vo.ts`](src/modules/catalog/domain/book/isbn.vo.ts), [`book-title.vo.ts`](src/modules/catalog/domain/book/book-title.vo.ts), [`author.vo.ts`](src/modules/catalog/domain/book/author.vo.ts), [`book-id.vo.ts`](src/modules/catalog/domain/book/book-id.vo.ts)
+Some VOs carry behavior beyond simple validation. `BorrowingLimit` exposes `allows(currentCount)` and `LoanPeriod` exposes `isOverdue(now)` — domain logic lives in the value objects, not in services.
+
+See: [`isbn.vo.ts`](src/modules/catalog/domain/book/isbn.vo.ts), [`borrowing-limit.vo.ts`](src/modules/lending/domain/member/borrowing-limit.vo.ts), [`loan-period.vo.ts`](src/modules/lending/domain/loan/loan-period.vo.ts)
 
 ### Aggregates
 
-Consistency boundaries. All state changes go through named factory methods. The constructor is private — the only way in is through a domain verb.
+Consistency boundaries. The constructor is private — the only way in is through a domain verb (factory method). State changes go through named behavior methods, not setters.
 
 ```typescript
+// Catalog — simple aggregate, no mutations
 const book = Book.register(id, isbn, title, author);
+
+// Lending — rich aggregate with behavior and internal state
+const member = Member.register(id, name, BorrowingLimit.create(3));
+member.borrow(loanId);    // validates limit, adds to internal Set
+member.returnBook(loanId); // removes from internal Set
 ```
 
-See: [`book.entity.ts`](src/modules/catalog/domain/book/book.entity.ts)
+`Member` maintains a `Set<LoanId>` internally — it's its own consistency boundary. The borrowing limit rule is checked **inside** the aggregate, not in the use case.
+
+See: [`book.entity.ts`](src/modules/catalog/domain/book/book.entity.ts), [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts), [`loan.entity.ts`](src/modules/lending/domain/loan/loan.entity.ts)
 
 ### Domain Exceptions
 
@@ -82,6 +92,21 @@ exceptions/
 ```
 
 See: [`exceptions/`](src/modules/catalog/domain/book/exceptions/)
+
+### Business Rules as First-Class Objects
+
+Cross-cutting business constraints are modeled as `Rule` objects — named after the constraint, testable in isolation, composable via `Rule.checkAll()`.
+
+```typescript
+Rule.checkAll([
+  new BookMustBeAvailable(existingLoan !== null),
+  new MemberMustNotHaveOverdueLoans(hasOverdue),
+]);
+```
+
+Each rule implements `isRespected()` and `createError()`. They live in the aggregate they protect: `MemberCannotExceedBorrowingLimit` is checked inside `Member.borrow()`, while `BookMustBeAvailable` is checked in the `BorrowBook` use case (it requires a repository query).
+
+See: [`member-cannot-exceed-borrowing-limit.rule.ts`](src/modules/lending/domain/member/rules/member-cannot-exceed-borrowing-limit.rule.ts), [`book-must-be-available.rule.ts`](src/modules/lending/domain/loan/rules/book-must-be-available.rule.ts)
 
 ### Ports (Repository Interfaces)
 
@@ -132,7 +157,7 @@ application/use-cases/
 - **Command use case:** creates VOs, calls the aggregate, persists via repository port
 - **Query use case:** reads directly from repository, returns a DTO, never touches the domain
 
-See: [`add-book-to-catalog.command.ts`](src/modules/catalog/application/use-cases/commands/add-book-to-catalog/add-book-to-catalog.command.ts), [`add-book-to-catalog.use-case.ts`](src/modules/catalog/application/use-cases/commands/add-book-to-catalog/add-book-to-catalog.use-case.ts)
+See: [`add-book-to-catalog/`](src/modules/catalog/application/use-cases/commands/add-book-to-catalog/), [`borrow-book/`](src/modules/lending/application/use-cases/commands/borrow-book/), [`return-book/`](src/modules/lending/application/use-cases/commands/return-book/)
 
 ---
 
@@ -144,7 +169,7 @@ Two levels, each in its own directory:
 
 Test domain building blocks in isolation: VOs, aggregates, rules. Written before production code. One file per concept.
 
-See: [`tests/unit/`](src/modules/catalog/tests/unit/)
+See: [`catalog/tests/unit/`](src/modules/catalog/tests/unit/), [`lending/tests/unit/`](src/modules/lending/tests/unit/)
 
 ### `functional/` — Functional Tests
 
@@ -161,7 +186,7 @@ const id = await execute();
 
 Each `.withXxx()` overrides only what matters for the test scenario.
 
-See: [`tests/functional/add-book-to-catalog.test.ts`](src/modules/catalog/tests/functional/add-book-to-catalog.test.ts)
+See: [`add-book-to-catalog.test.ts`](src/modules/catalog/tests/functional/add-book-to-catalog.test.ts), [`borrow-book.test.ts`](src/modules/lending/tests/functional/borrow-book.test.ts), [`return-book.test.ts`](src/modules/lending/tests/functional/return-book.test.ts)
 
 ---
 
@@ -175,24 +200,38 @@ src/
 │   ├── id-generator.ts                     # Port: ID generation
 │   └── clock.ts                            # Port: time access
 │
-└── modules/catalog/                        # Bounded Context: Catalog
-    ├── domain/book/                        # Aggregate: Book
-    │   ├── book.entity.ts                  # Aggregate root
-    │   ├── book-id.vo.ts                   # Value Objects
-    │   ├── isbn.vo.ts
-    │   ├── book-title.vo.ts
-    │   ├── author.vo.ts
-    │   ├── books-repository.interface.ts   # Port (in domain, not infra)
-    │   └── exceptions/                     # Typed domain exceptions
-    ├── application/use-cases/
-    │   └── commands/                       # CQRS: write use cases
-    │       └── add-book-to-catalog/
-    │           ├── add-book-to-catalog.command.ts
-    │           └── add-book-to-catalog.use-case.ts
-    ├── infrastructure/                     # Adapters
-    │   ├── books.in-memory.repository.ts
-    │   └── id-generator.ts
-    └── tests/
-        ├── unit/                           # TDD — domain in isolation
-        └── functional/                     # Behavior — use case level
+└── modules/
+    ├── catalog/                            # Bounded Context: Catalog (Supporting)
+    │   ├── domain/book/                    # Aggregate: Book
+    │   │   ├── book.entity.ts
+    │   │   ├── book-id.vo.ts, isbn.vo.ts, book-title.vo.ts, author.vo.ts
+    │   │   ├── books-repository.interface.ts
+    │   │   └── exceptions/
+    │   ├── application/use-cases/commands/
+    │   │   └── add-book-to-catalog/
+    │   ├── infrastructure/
+    │   └── tests/ (unit/ + functional/)
+    │
+    └── lending/                            # Bounded Context: Lending (Core Domain)
+        ├── domain/
+        │   ├── member/                     # Aggregate: Member
+        │   │   ├── member.entity.ts        # Tracks active loans, enforces limit
+        │   │   ├── member-id.vo.ts, member-name.vo.ts, borrowing-limit.vo.ts
+        │   │   ├── members-repository.interface.ts
+        │   │   ├── rules/                  # Business rules as first-class objects
+        │   │   └── exceptions/
+        │   ├── loan/                       # Aggregate: Loan
+        │   │   ├── loan.entity.ts          # Period, status, overdue detection
+        │   │   ├── loan-id.vo.ts, loan-period.vo.ts
+        │   │   ├── loans-repository.interface.ts
+        │   │   ├── rules/
+        │   │   └── exceptions/
+        │   └── book-reference/             # ACL — Catalog's Book seen from Lending
+        │       ├── book-reference.vo.ts
+        │       └── book-references-repository.interface.ts
+        ├── application/use-cases/commands/
+        │   ├── borrow-book/
+        │   └── return-book/
+        ├── infrastructure/
+        └── tests/ (unit/ + functional/)
 ```
