@@ -9,6 +9,7 @@ import { ISBN } from '@catalog/domain/book/isbn.vo';
 import { BookTitle } from '@catalog/domain/book/book-title.vo';
 import { Author } from '@catalog/domain/book/author.vo';
 import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { BOOK_BORROWED, BOOK_RETURNED } from '@shared/domain/domain-events';
 import { OnBookBorrowedHandler } from '@catalog/application/event-handlers/on-book-borrowed.handler';
 import { OnBookReturnedHandler } from '@catalog/application/event-handlers/on-book-returned.handler';
 import { BookBorrowedEvent } from '@lending/domain/loan/events/book-borrowed.event';
@@ -148,7 +149,7 @@ describe('GetAvailableBooks', () => {
       await booksRepo.save(book);
 
       const borrowedHandler = new OnBookBorrowedHandler(registry);
-      eventDispatcher.subscribe('lending::book-borrowed', (e) => borrowedHandler.handle(e));
+      eventDispatcher.subscribe(BOOK_BORROWED, (e) => borrowedHandler.handle(e));
 
       const useCase = new GetAvailableBooks(booksRepo, registry);
 
@@ -173,8 +174,8 @@ describe('GetAvailableBooks', () => {
 
       const borrowedHandler = new OnBookBorrowedHandler(registry);
       const returnedHandler = new OnBookReturnedHandler(registry);
-      eventDispatcher.subscribe('lending::book-borrowed', (e) => borrowedHandler.handle(e));
-      eventDispatcher.subscribe('lending::book-returned', (e) => returnedHandler.handle(e));
+      eventDispatcher.subscribe(BOOK_BORROWED, (e) => borrowedHandler.handle(e));
+      eventDispatcher.subscribe(BOOK_RETURNED, (e) => returnedHandler.handle(e));
 
       const useCase = new GetAvailableBooks(booksRepo, registry);
 
@@ -194,7 +195,7 @@ describe('GetAvailableBooks', () => {
       const registry = new BorrowedBookRegistryInMemory();
       const handler = new OnBookBorrowedHandler(registry);
 
-      const event = new FakeEvent('lending::book-borrowed', { loanId: 'loan-1', memberId: 'mem-1' });
+      const event = new FakeEvent(BOOK_BORROWED, { loanId: 'loan-1', memberId: 'mem-1' });
 
       await expect(handler.handle(event)).rejects.toThrow('Invalid bookReference');
     });
@@ -203,7 +204,7 @@ describe('GetAvailableBooks', () => {
       const registry = new BorrowedBookRegistryInMemory();
       const handler = new OnBookBorrowedHandler(registry);
 
-      const event = new FakeEvent('lending::book-borrowed', { loanId: 'loan-1', memberId: 'mem-1', bookReference: '' });
+      const event = new FakeEvent(BOOK_BORROWED, { loanId: 'loan-1', memberId: 'mem-1', bookReference: '' });
 
       await expect(handler.handle(event)).rejects.toThrow('BookId cannot be empty');
     });
@@ -212,7 +213,7 @@ describe('GetAvailableBooks', () => {
       const registry = new BorrowedBookRegistryInMemory();
       const handler = new OnBookBorrowedHandler(registry);
 
-      const event = new FakeEvent('lending::book-borrowed', { loanId: 'loan-1', memberId: 'mem-1', bookReference: 42 });
+      const event = new FakeEvent(BOOK_BORROWED, { loanId: 'loan-1', memberId: 'mem-1', bookReference: 42 });
 
       await expect(handler.handle(event)).rejects.toThrow('Invalid bookReference');
     });
@@ -221,7 +222,7 @@ describe('GetAvailableBooks', () => {
       const registry = new BorrowedBookRegistryInMemory();
       const handler = new OnBookReturnedHandler(registry);
 
-      const event = new FakeEvent('lending::book-returned', { loanId: 'loan-1', memberId: 'mem-1' });
+      const event = new FakeEvent(BOOK_RETURNED, { loanId: 'loan-1', memberId: 'mem-1' });
 
       await expect(handler.handle(event)).rejects.toThrow('Invalid bookReference');
     });
@@ -230,7 +231,7 @@ describe('GetAvailableBooks', () => {
       const registry = new BorrowedBookRegistryInMemory();
       const handler = new OnBookReturnedHandler(registry);
 
-      const event = new FakeEvent('lending::book-returned', { loanId: 'loan-1', memberId: 'mem-1', bookReference: '' });
+      const event = new FakeEvent(BOOK_RETURNED, { loanId: 'loan-1', memberId: 'mem-1', bookReference: '' });
 
       await expect(handler.handle(event)).rejects.toThrow('BookId cannot be empty');
     });

@@ -7,6 +7,7 @@ import { BookTitle } from '@catalog/domain/book/book-title.vo';
 import { DomainException } from '@shared/domain/domain.exception';
 import { DomainEvent } from '@shared/domain/domain-event';
 import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { BOOK_REGISTERED } from '@shared/domain/domain-events';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
 
 class StubIdGenerator implements IdGeneratorInterface {
@@ -86,7 +87,7 @@ describe('AddBookToCatalog', () => {
       .withGeneratedId('book-42')
       .build();
     const captured: DomainEvent[] = [];
-    eventDispatcher.subscribe('catalog::book-registered', async (e) => { captured.push(e); });
+    eventDispatcher.subscribe(BOOK_REGISTERED, async (e) => { captured.push(e); });
 
     await execute();
 

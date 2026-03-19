@@ -10,6 +10,7 @@ export default defineConfig({
       '@shared': resolve(__dirname, 'src/shared'),
       '@catalog': resolve(__dirname, 'src/modules/catalog'),
       '@lending': resolve(__dirname, 'src/modules/lending'),
+      '@infrastructure': resolve(__dirname, 'src/infrastructure'),
     },
   },
   test: {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BookReference } from '@lending/domain/book-reference/book-reference.vo';
 import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { BOOK_REGISTERED } from '@shared/domain/domain-events';
 import { DomainException } from '@shared/domain/domain.exception';
 import { OnBookRegisteredHandler } from '@lending/application/event-handlers/on-book-registered.handler';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
@@ -38,7 +39,7 @@ class InterBcTestBuilder {
     const eventDispatcher = new DomainEventDispatcher();
 
     const handler = new OnBookRegisteredHandler(bookReferencesRepository);
-    eventDispatcher.subscribe('catalog::book-registered', (event) => handler.handle(event));
+    eventDispatcher.subscribe(BOOK_REGISTERED, (event) => handler.handle(event));
 
     const useCase = new AddBookToCatalog(
       booksRepository,

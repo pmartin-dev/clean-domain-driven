@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { BookRegisteredEvent } from '@catalog/domain/book/events/book-registered.event';
+import { BOOK_REGISTERED } from '@shared/domain/domain-events';
 
 describe('BookRegisteredEvent', () => {
   it('has the correct event name', () => {
     const event = new BookRegisteredEvent('book-1');
 
-    expect(event.name).toBe('catalog::book-registered');
+    expect(event.name).toBe(BOOK_REGISTERED);
   });
 
   it('carries the bookId in payload', () => {

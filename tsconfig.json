@@ -4,6 +4,8 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -16,7 +18,8 @@
     "paths": {
       "@shared/*": ["src/shared/*"],
       "@catalog/*": ["src/modules/catalog/*"],
-      "@lending/*": ["src/modules/lending/*"]
+      "@lending/*": ["src/modules/lending/*"],
+      "@infrastructure/*": ["src/infrastructure/*"]
     }
   },
   "include": ["src"],

@@ -1,9 +1,7 @@
 import { DomainEvent } from './domain-event';
-import { EventDispatcherInterface } from './event-dispatcher.interface';
+import { EventHandler, SubscribableEventDispatcher } from './event-dispatcher.interface';
 
-type EventHandler = (event: DomainEvent) => Promise<void>;
-
-export class DomainEventDispatcher implements EventDispatcherInterface {
+export class DomainEventDispatcher implements SubscribableEventDispatcher {
   private readonly handlers = new Map<string, EventHandler[]>();
 
   subscribe(eventName: string, handler: EventHandler): void {

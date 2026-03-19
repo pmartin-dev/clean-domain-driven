@@ -10,13 +10,20 @@
     "test": "vitest",
     "test:unit": "vitest tests/unit",
     "test:functional": "vitest tests/functional",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start": "tsx src/infrastructure/nestjs/main.ts"
   },
   "devDependencies": {
-    "typescript": "5.8.2",
-    "vitest": "4.0.15"
+    "@types/express": "5.0.6",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
   },
   "dependencies": {
+    "@nestjs/common": "11.1.17",
+    "@nestjs/core": "11.1.17",
+    "@nestjs/platform-express": "11.1.17",
+    "reflect-metadata": "0.2.2",
     "uuid": "13.0.0"
   }
 }
