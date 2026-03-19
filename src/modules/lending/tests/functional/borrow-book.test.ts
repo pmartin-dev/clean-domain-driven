@@ -13,6 +13,7 @@ import { LoanId } from '@lending/domain/loan/loan-id.vo';
 import { LoanPeriod } from '@lending/domain/loan/loan-period.vo';
 import { Loan } from '@lending/domain/loan/loan.entity';
 import { DomainException } from '@shared/domain/domain.exception';
+import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
 import { ClockInterface } from '@shared/domain/clock';
 
@@ -46,6 +47,8 @@ class BorrowBookTestBuilder {
   private now = new Date('2026-03-18');
   private existingLoans: Loan[] = [];
   private memberActiveLoans: LoanId[] = [];
+  private seedMember = true;
+  private seedBookReference = true;
 
   withMemberId(id: string): this { this.memberId = id; return this; }
   withBorrowingLimit(limit: number): this { this.borrowingLimit = limit; return this; }
@@ -57,40 +60,49 @@ class BorrowBookTestBuilder {
     this.memberActiveLoans.push(LoanId.create(loanId));
     return this;
   }
+  withoutMember(): this { this.seedMember = false; return this; }
+  withoutBookReference(): this { this.seedBookReference = false; return this; }
 
   async build() {
     const membersRepo = new MembersInMemoryRepository();
     const loansRepo = new LoansInMemoryRepository();
     const bookRefsRepo = new BookReferencesInMemoryRepository();
 
-    const member = Member.register(
-      MemberId.create(this.memberId),
-      MemberName.create(this.memberName),
-      BorrowingLimit.create(this.borrowingLimit),
-    );
-    for (const loanId of this.memberActiveLoans) {
-      member.borrow(loanId, false);
+    if (this.seedMember) {
+      const member = Member.register(
+        MemberId.create(this.memberId),
+        MemberName.create(this.memberName),
+        BorrowingLimit.create(this.borrowingLimit),
+      );
+      for (const loanId of this.memberActiveLoans) {
+        member.borrow(loanId, false);
+      }
+      await membersRepo.save(member);
     }
-    await membersRepo.save(member);
 
-    await bookRefsRepo.save(BookReference.create(this.bookId));
+    if (this.seedBookReference) {
+      await bookRefsRepo.save(BookReference.create(this.bookId));
+    }
 
     for (const loan of this.existingLoans) {
       await loansRepo.save(loan);
     }
 
+    const eventDispatcher = new DomainEventDispatcher();
     const useCase = new BorrowBook(
       membersRepo,
       loansRepo,
       bookRefsRepo,
       new StubIdGenerator(this.generatedLoanId),
       new StubClock(this.now),
+      eventDispatcher,
     );
 
     return {
       execute: () => useCase.execute(new BorrowBookCommand(this.memberId, this.bookId)),
       membersRepo,
       loansRepo,
+      eventDispatcher,
     };
   }
 }
@@ -162,40 +174,18 @@ describe('BorrowBook', () => {
   });
 
   it('rejects when member does not exist', async () => {
-    const membersRepo = new MembersInMemoryRepository();
-    const loansRepo = new LoansInMemoryRepository();
-    const bookRefsRepo = new BookReferencesInMemoryRepository();
-    await bookRefsRepo.save(BookReference.create('book-1'));
+    const { execute } = await new BorrowBookTestBuilder()
+      .withoutMember()
+      .build();
 
-    const useCase = new BorrowBook(
-      membersRepo, loansRepo, bookRefsRepo,
-      new StubIdGenerator('loan-1'),
-      new StubClock(new Date('2026-03-18')),
-    );
-
-    await expect(
-      useCase.execute(new BorrowBookCommand('mem-unknown', 'book-1')),
-    ).rejects.toThrow('Member not found');
+    await expect(execute()).rejects.toThrow('Member not found');
   });
 
   it('rejects when book reference does not exist', async () => {
-    const membersRepo = new MembersInMemoryRepository();
-    const loansRepo = new LoansInMemoryRepository();
-    const bookRefsRepo = new BookReferencesInMemoryRepository();
-    await membersRepo.save(Member.register(
-      MemberId.create('mem-1'),
-      MemberName.create('Alice'),
-      BorrowingLimit.create(3),
-    ));
+    const { execute } = await new BorrowBookTestBuilder()
+      .withoutBookReference()
+      .build();
 
-    const useCase = new BorrowBook(
-      membersRepo, loansRepo, bookRefsRepo,
-      new StubIdGenerator('loan-1'),
-      new StubClock(new Date('2026-03-18')),
-    );
-
-    await expect(
-      useCase.execute(new BorrowBookCommand('mem-1', 'book-unknown')),
-    ).rejects.toThrow('Book not found in catalog');
+    await expect(execute()).rejects.toThrow('Book not found in catalog');
   });
 });

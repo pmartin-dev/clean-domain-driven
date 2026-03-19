@@ -1,5 +1,6 @@
 import { BooksRepository } from '@catalog/domain/book/books-repository.interface';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
+import { EventDispatcherInterface } from '@shared/domain/event-dispatcher.interface';
 import { Book } from '@catalog/domain/book/book.entity';
 import { BookId } from '@catalog/domain/book/book-id.vo';
 import { ISBN } from '@catalog/domain/book/isbn.vo';
@@ -11,6 +12,7 @@ export class AddBookToCatalog {
   constructor(
     private readonly booksRepository: BooksRepository,
     private readonly idGenerator: IdGeneratorInterface,
+    private readonly eventDispatcher: EventDispatcherInterface,
   ) {}
 
   async execute(command: AddBookToCatalogCommand): Promise<string> {
@@ -23,6 +25,7 @@ export class AddBookToCatalog {
     );
 
     await this.booksRepository.save(book);
+    await this.eventDispatcher.dispatch(book.pullDomainEvents());
 
     return bookId.value;
   }

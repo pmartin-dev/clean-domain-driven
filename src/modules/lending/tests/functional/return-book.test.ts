@@ -12,6 +12,7 @@ import { LoanId } from '@lending/domain/loan/loan-id.vo';
 import { LoanPeriod } from '@lending/domain/loan/loan-period.vo';
 import { BookReference } from '@lending/domain/book-reference/book-reference.vo';
 import { DomainException } from '@shared/domain/domain.exception';
+import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
 
 const now = new Date('2026-03-18');
 
@@ -42,12 +43,14 @@ class ReturnBookTestBuilder {
     );
     await loansRepo.save(loan);
 
-    const useCase = new ReturnBook(loansRepo, membersRepo);
+    const eventDispatcher = new DomainEventDispatcher();
+    const useCase = new ReturnBook(loansRepo, membersRepo, eventDispatcher);
 
     return {
       execute: () => useCase.execute(new ReturnBookCommand(this.loanId)),
       membersRepo,
       loansRepo,
+      eventDispatcher,
     };
   }
 }
@@ -74,7 +77,7 @@ describe('ReturnBook', () => {
   it('rejects when loan does not exist', async () => {
     const loansRepo = new LoansInMemoryRepository();
     const membersRepo = new MembersInMemoryRepository();
-    const useCase = new ReturnBook(loansRepo, membersRepo);
+    const useCase = new ReturnBook(loansRepo, membersRepo, new DomainEventDispatcher());
 
     await expect(
       useCase.execute(new ReturnBookCommand('loan-unknown')),
@@ -86,5 +89,23 @@ describe('ReturnBook', () => {
 
     await execute();
     await expect(execute()).rejects.toThrow(DomainException);
+  });
+
+  it('rejects when member does not exist for the loan', async () => {
+    const loansRepo = new LoansInMemoryRepository();
+    const membersRepo = new MembersInMemoryRepository();
+    const loan = Loan.create(
+      LoanId.create('loan-orphan'),
+      MemberId.create('mem-deleted'),
+      BookReference.create('book-1'),
+      LoanPeriod.createFromNow(now),
+    );
+    await loansRepo.save(loan);
+
+    const useCase = new ReturnBook(loansRepo, membersRepo, new DomainEventDispatcher());
+
+    await expect(
+      useCase.execute(new ReturnBookCommand('loan-orphan')),
+    ).rejects.toThrow('Member not found');
   });
 });

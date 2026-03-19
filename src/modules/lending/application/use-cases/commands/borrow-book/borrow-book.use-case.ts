@@ -1,6 +1,7 @@
 import { Rule } from '@shared/domain/rule';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
 import { ClockInterface } from '@shared/domain/clock';
+import { EventDispatcherInterface } from '@shared/domain/event-dispatcher.interface';
 import { DomainException } from '@shared/domain/domain.exception';
 import { MembersRepository } from '@lending/domain/member/members-repository.interface';
 import { LoansRepository } from '@lending/domain/loan/loans-repository.interface';
@@ -20,6 +21,7 @@ export class BorrowBook {
     private readonly bookReferencesRepository: BookReferencesRepository,
     private readonly idGenerator: IdGeneratorInterface,
     private readonly clock: ClockInterface,
+    private readonly eventDispatcher: EventDispatcherInterface,
   ) {}
 
   async execute(command: BorrowBookCommand): Promise<string> {
@@ -51,8 +53,11 @@ export class BorrowBook {
 
     member.borrow(loanId, hasOverdue);
 
+    const events = [...loan.pullDomainEvents(), ...member.pullDomainEvents()];
+
     await this.loansRepository.save(loan);
     await this.membersRepository.save(member);
+    await this.eventDispatcher.dispatch(events);
 
     return loanId.value;
   }

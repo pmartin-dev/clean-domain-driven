@@ -114,6 +114,36 @@ Defined in the **domain layer** — the domain dictates what it needs, not the i
 
 See: [`books-repository.interface.ts`](src/modules/catalog/domain/book/books-repository.interface.ts)
 
+### Domain Events
+
+Immutable events raised by aggregates after state changes. Each aggregate extends `AggregateRoot`, which provides `raise()` to accumulate events and `pullDomainEvents()` to drain them.
+
+```typescript
+// Inside Book.register()
+book.raise(new BookRegisteredEvent(id.value));
+
+// In the use case, after persistence
+await this.eventDispatcher.dispatch(book.pullDomainEvents());
+```
+
+Events follow the naming convention `module::action` and carry minimal payload (IDs only). The `DomainEventDispatcher` is a synchronous in-process pub/sub — handlers are registered with `subscribe(eventName, handler)` and called sequentially on `dispatch()`.
+
+See: [`domain-event.ts`](src/shared/domain/domain-event.ts), [`aggregate-root.ts`](src/shared/domain/aggregate-root.ts), [`domain-event-dispatcher.ts`](src/shared/domain/domain-event-dispatcher.ts), [`book-registered.event.ts`](src/modules/catalog/domain/book/events/book-registered.event.ts)
+
+### Anti-Corruption Layer
+
+Bounded Contexts communicate exclusively through domain events — no direct cross-module imports. The ACL in Lending listens to Catalog events and translates them into Lending's own model.
+
+```typescript
+// When Catalog publishes catalog::book-registered,
+// Lending's handler creates a BookReference from the bookId
+dispatcher.subscribe('catalog::book-registered', (event) => handler.handle(event));
+```
+
+This means adding a book to the Catalog automatically creates a `BookReference` in Lending — the two contexts stay in sync without coupling.
+
+See: [`on-book-registered.handler.ts`](src/modules/lending/application/event-handlers/on-book-registered.handler.ts)
+
 ---
 
 ## Clean Architecture
@@ -195,6 +225,9 @@ See: [`add-book-to-catalog.test.ts`](src/modules/catalog/tests/functional/add-bo
 ```
 src/
 ├── shared/domain/                          # Base classes & ports shared across BCs
+│   ├── domain-event.ts                     # Abstract DomainEvent (immutable)
+│   ├── aggregate-root.ts                   # AggregateRoot (raise/pull events)
+│   ├── domain-event-dispatcher.ts          # In-process pub/sub for domain events
 │   ├── rule.ts                             # Abstract Rule (business rules pattern)
 │   ├── domain.exception.ts                 # Base DomainException
 │   ├── id-generator.ts                     # Port: ID generation
@@ -202,10 +235,12 @@ src/
 │
 └── modules/
     ├── catalog/                            # Bounded Context: Catalog (Supporting)
-    │   ├── domain/book/                    # Aggregate: Book
+    │   ├── domain/book/                    # Aggregate: Book (extends AggregateRoot)
     │   │   ├── book.entity.ts
     │   │   ├── book-id.vo.ts, isbn.vo.ts, book-title.vo.ts, author.vo.ts
     │   │   ├── books-repository.interface.ts
+    │   │   ├── events/                     # Domain events raised by Book
+    │   │   │   └── book-registered.event.ts
     │   │   └── exceptions/
     │   ├── application/use-cases/commands/
     │   │   └── add-book-to-catalog/
@@ -214,24 +249,30 @@ src/
     │
     └── lending/                            # Bounded Context: Lending (Core Domain)
         ├── domain/
-        │   ├── member/                     # Aggregate: Member
+        │   ├── member/                     # Aggregate: Member (extends AggregateRoot)
         │   │   ├── member.entity.ts        # Tracks active loans, enforces limit
         │   │   ├── member-id.vo.ts, member-name.vo.ts, borrowing-limit.vo.ts
         │   │   ├── members-repository.interface.ts
         │   │   ├── rules/                  # Business rules as first-class objects
         │   │   └── exceptions/
-        │   ├── loan/                       # Aggregate: Loan
+        │   ├── loan/                       # Aggregate: Loan (extends AggregateRoot)
         │   │   ├── loan.entity.ts          # Period, status, overdue detection
         │   │   ├── loan-id.vo.ts, loan-period.vo.ts
         │   │   ├── loans-repository.interface.ts
+        │   │   ├── events/                 # Domain events raised by Loan
+        │   │   │   ├── book-borrowed.event.ts
+        │   │   │   └── book-returned.event.ts
         │   │   ├── rules/
         │   │   └── exceptions/
         │   └── book-reference/             # ACL — Catalog's Book seen from Lending
         │       ├── book-reference.vo.ts
         │       └── book-references-repository.interface.ts
-        ├── application/use-cases/commands/
-        │   ├── borrow-book/
-        │   └── return-book/
+        ├── application/
+        │   ├── event-handlers/             # ACL: reacts to cross-BC events
+        │   │   └── on-book-registered.handler.ts
+        │   └── use-cases/commands/
+        │       ├── borrow-book/
+        │       └── return-book/
         ├── infrastructure/
         └── tests/ (unit/ + functional/)
 ```

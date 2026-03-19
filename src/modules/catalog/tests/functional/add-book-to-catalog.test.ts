@@ -5,6 +5,8 @@ import { BooksInMemoryRepository } from '@catalog/infrastructure/books.in-memory
 import { BookId } from '@catalog/domain/book/book-id.vo';
 import { BookTitle } from '@catalog/domain/book/book-title.vo';
 import { DomainException } from '@shared/domain/domain.exception';
+import { DomainEvent } from '@shared/domain/domain-event';
+import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
 
 class StubIdGenerator implements IdGeneratorInterface {
@@ -43,7 +45,8 @@ class AddBookToCatalogTestBuilder {
   build() {
     const repository = new BooksInMemoryRepository();
     const idGenerator = new StubIdGenerator(this.generatedId);
-    const useCase = new AddBookToCatalog(repository, idGenerator);
+    const eventDispatcher = new DomainEventDispatcher();
+    const useCase = new AddBookToCatalog(repository, idGenerator, eventDispatcher);
 
     return {
       execute: () =>
@@ -51,6 +54,7 @@ class AddBookToCatalogTestBuilder {
           new AddBookToCatalogCommand(this.isbn, this.title, this.author),
         ),
       repository,
+      eventDispatcher,
     };
   }
 }
@@ -77,17 +81,26 @@ describe('AddBookToCatalog', () => {
     await expect(execute()).rejects.toThrow(DomainException);
   });
 
+  it('dispatches a BookRegisteredEvent after registering', async () => {
+    const { execute, eventDispatcher } = new AddBookToCatalogTestBuilder()
+      .withGeneratedId('book-42')
+      .build();
+    const captured: DomainEvent[] = [];
+    eventDispatcher.subscribe('catalog::book-registered', async (e) => { captured.push(e); });
+
+    await execute();
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].payload).toEqual({ bookId: 'book-42' });
+  });
+
   it('does not persist the book when validation fails', async () => {
     const { execute, repository } = new AddBookToCatalogTestBuilder()
       .withGeneratedId('book-1')
       .withIsbn('invalid')
       .build();
 
-    try {
-      await execute();
-    } catch {
-      // expected
-    }
+    await expect(execute()).rejects.toThrow(DomainException);
 
     const persisted = await repository.findById(BookId.create('book-1'));
     expect(persisted).toBeNull();

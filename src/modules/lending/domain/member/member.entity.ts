@@ -1,3 +1,4 @@
+import { AggregateRoot } from '@shared/domain/aggregate-root';
 import { Rule } from '@shared/domain/rule';
 import { MemberId } from './member-id.vo';
 import { MemberName } from './member-name.vo';
@@ -7,13 +8,15 @@ import { MemberCannotExceedBorrowingLimit } from './rules/member-cannot-exceed-b
 import { MemberMustNotHaveOverdueLoans } from './rules/member-must-not-have-overdue-loans.rule';
 import { LoanIsNotActiveForMember } from './exceptions/loan-is-not-active-for-member.exception';
 
-export class Member {
+export class Member extends AggregateRoot {
   private constructor(
     private readonly _id: MemberId,
     private readonly _name: MemberName,
     private readonly _borrowingLimit: BorrowingLimit,
     private readonly _activeLoans: Set<string>,
-  ) {}
+  ) {
+    super();
+  }
 
   static register(id: MemberId, name: MemberName, borrowingLimit: BorrowingLimit): Member {
     return new Member(id, name, borrowingLimit, new Set());
