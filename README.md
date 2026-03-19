@@ -8,6 +8,24 @@ This repository walks through the DDD methodology — from understanding the bus
 
 ---
 
+## From User Stories to Code
+
+In DDD with Clean Architecture, each **User Story** maps to exactly one **Use Case**. The US defines the business need, the acceptance criteria express expected behavior (BDD), and the use case orchestrates the domain to fulfill it.
+
+This project implements 5 user stories — 3 commands (writes) and 2 queries (reads):
+
+| User Story | Use Case | Type | Bounded Context |
+|---|---|---|---|
+| [Add a Book to the Catalog](docs/user-stories/us-add-book-to-catalog.md) | `AddBookToCatalog` | Command | Catalog |
+| [Borrow a Book](docs/user-stories/us-borrow-book.md) | `BorrowBook` | Command | Lending |
+| [Return a Book](docs/user-stories/us-return-book.md) | `ReturnBook` | Command | Lending |
+| [View Available Books](docs/user-stories/us-get-available-books.md) | `GetAvailableBooks` | Query | Catalog |
+| [View My Active Loans](docs/user-stories/us-get-member-loans.md) | `GetMemberLoans` | Query | Lending |
+
+Each US file contains the story, BDD acceptance criteria (Given/When/Then), and links to every implementation artifact — from the aggregate down to the functional test.
+
+---
+
 ## Problem Space
 
 Before writing any code, DDD starts by understanding the **business domain**.
