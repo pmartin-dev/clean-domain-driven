@@ -12,4 +12,8 @@ export class BooksInMemoryRepository implements BooksRepository {
   async findById(id: BookId): Promise<Book | null> {
     return this.books.get(id.value) ?? null;
   }
+
+  async findAll(): Promise<Book[]> {
+    return [...this.books.values()];
+  }
 }
