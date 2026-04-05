@@ -8,6 +8,12 @@ This repository walks through the DDD methodology — from understanding the bus
 
 > **Note:** This project is opinionated by design. The patterns and conventions shown here are one way to implement DDD — not the only way. Treat them as a starting point to adapt and evolve, not as rigid principles set in stone.
 
+> *"The alternative to good design is bad design, not no design at all."*
+> — Douglas Martin, cited in *DDD Distilled*
+
+> *"Focus on Business Complexity, Not Technical Complexity. You are using DDD because the business model complexity is high. We never want to make the domain model more complex than it should be."*
+> — Vaughn Vernon, *DDD Distilled*
+
 ---
 
 ## From User Stories to Code
@@ -47,6 +53,9 @@ See [PRD.md](./PRD.md) for the full problem space analysis.
 
 Strategic Design structures the domain into **Bounded Contexts** with their own language and models.
 
+> *"A Bounded Context is a semantic contextual boundary. This means that within the boundary each component of the software model has a specific meaning and does specific things. The components inside a Bounded Context are context specific and semantically motivated."*
+> — Vaughn Vernon, *DDD Distilled*
+
 ### Bounded Contexts
 
 - **Catalog** — manages the book registry (adding, consulting)
@@ -83,6 +92,11 @@ The shared vocabulary between domain experts and developers. Each term has a pre
 ### Context Map
 
 Catalog is **upstream** (publishes events), Lending is **downstream** (consumes them). An **Anti-Corruption Layer** in Lending translates Catalog's model into its own language.
+
+> *"Whenever possible, you should try to create an Anticorruption Layer between your downstream model and an upstream integration model, so that you can produce model concepts on your side of the integration that specifically fit your business needs."*
+> — Vaughn Vernon, *DDD Distilled*
+
+This is why "Book" has a different representation in each context — as Vernon puts it: *"The name of the Bounded Context takes care of that scoping."* In Catalog it's a rich `Book` aggregate; in Lending it's a lightweight `BookReference` value object.
 
 ```
 ┌──────────────┐       domain event        ┌──────────────┐
@@ -121,6 +135,11 @@ Some VOs carry behavior beyond simple validation. `BorrowingLimit` exposes `allo
 See: [`isbn.vo.ts`](src/modules/catalog/domain/book/isbn.vo.ts), [`borrowing-limit.vo.ts`](src/modules/lending/domain/member/borrowing-limit.vo.ts), [`loan-period.vo.ts`](src/modules/lending/domain/loan/loan-period.vo.ts)
 
 ### Aggregates
+
+> Vernon's four rules of Aggregate design: *(1)* Protect business invariants inside Aggregate boundaries. *(2)* Design small Aggregates. *(3)* Reference other Aggregates by identity only. *(4)* Update other Aggregates using eventual consistency. — *DDD Distilled*
+
+> *"Place your business logic in your domain model, or suffer bugs sponsored by an Anemic Domain Model."*
+> — Vaughn Vernon, *DDD Distilled*
 
 Consistency boundaries. The constructor is private — the only way in is through a domain verb (factory method). State changes go through named behavior methods, not setters.
 
@@ -175,6 +194,9 @@ See: [`books-repository.interface.ts`](src/modules/catalog/domain/book/books-rep
 
 ### Domain Events
 
+> *"A Domain Event is a record of some business-significant occurrence in a Bounded Context. [...] Your Domain Event type names should be a statement of a past occurrence, that is, a verb in the past tense."*
+> — Vaughn Vernon, *DDD Distilled*
+
 Immutable events raised by aggregates after state changes. Each aggregate extends `AggregateRoot`, which provides `raise()` to accumulate events and `pullDomainEvents()` to drain them.
 
 ```typescript
@@ -208,6 +230,9 @@ See: [`on-book-registered.handler.ts`](src/modules/lending/application/event-han
 ---
 
 ## Clean Architecture
+
+> *"Although there will be technology scattered throughout your architecture, the domain model should be free of technology."*
+> — Vaughn Vernon, *DDD Distilled*
 
 Dependencies point **inward**. The domain depends on nothing. The framework arrives last.
 
@@ -479,3 +504,11 @@ src/
         │       └── injection-tokens.ts
         └── tests/ (unit/ + functional/)
 ```
+
+---
+
+## References
+
+- Evans, E. (2003). *Domain-Driven Design: Tackling Complexity in the Heart of Software*. Addison-Wesley.
+- Vernon, V. (2013). *Implementing Domain-Driven Design*. Addison-Wesley.
+- Vernon, V. (2016). *Domain-Driven Design Distilled*. Addison-Wesley.
