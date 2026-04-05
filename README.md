@@ -1,12 +1,12 @@
 # Clean Domain-Driven
 
-A practical guide to **Domain-Driven Design** with **Clean Architecture** and **CQRS** in TypeScript.
+A production-ready reference implementation of Domain-Driven Design with Clean Architecture and CQRS in TypeScript — using a library lending system as a concrete domain.
 
 This repository walks through the DDD methodology — from understanding the business domain to implementing it in code — using a library book lending system as a concrete example.
 
 **Target audience:** developers who can code but want to understand DDD in practice.
 
-> **Note:** This project is opinionated by design. The patterns and conventions shown here are one way to implement DDD — not the only way. Treat them as a starting point to adapt and evolve, not as rigid principles set in stone.
+**Note:** This project is opinionated by design. The patterns and conventions shown here are one way to implement DDD — not the only way. Treat them as a starting point to adapt and evolve, not as rigid principles set in stone.
 
 > *"The alternative to good design is bad design, not no design at all."*
 > — Douglas Martin, cited in *DDD Distilled*
@@ -14,9 +14,48 @@ This repository walks through the DDD methodology — from understanding the bus
 > *"Focus on Business Complexity, Not Technical Complexity. You are using DDD because the business model complexity is high. We never want to make the domain model more complex than it should be."*
 > — Vaughn Vernon, *DDD Distilled*
 
+## Table of Contents
+
+- [Problem Space](#problem-space)
+- [Solution Space](#solution-space)
+  - [From User Stories to Code](#from-user-stories-to-code)
+  - [Strategic Design](#strategic-design)
+  - [Tactical Design — Building Blocks](#tactical-design--building-blocks)
+- [Clean Architecture](#clean-architecture)
+- [CQRS — Living with Clean Architecture](#cqrs--living-with-clean-architecture)
+- [NestJS — Infrastructure Framework](#nestjs--infrastructure-framework)
+- [Testing](#testing)
+- [Conventions](#conventions)
+- [Project Structure](#project-structure)
+- [Non-Goals](#non-goals)
+- [References](#references)
+
 ---
 
-## From User Stories to Code
+## Problem Space
+
+Before writing any code, DDD starts by understanding the **business domain**.
+
+Our domain is a **municipal library** that manages its book catalog and loans to members.
+
+| Subdomain | Type | Description |
+|---|---|---|
+| **Lending** | Core Domain | Book loans — the reason the library exists. Richest business rules. |
+| **Catalog** | Supporting | Book catalog — necessary but simpler. Manages available books and metadata. |
+
+### Business Problems
+
+- A member wants to **borrow** a book — is it possible? (book availability, borrowing limit, overdue loans)
+- A member **returns** a book — update the loan, make the book available again
+- The library **adds** a book to the catalog — it becomes available for borrowing
+
+---
+
+## Solution Space
+
+The Solution Space answers the Problem Space: how do we structure and implement the domain? DDD splits this into **Strategic Design** (how to divide the domain) and **Tactical Design** (how to build each piece).
+
+### From User Stories to Code
 
 In DDD with Clean Architecture, each **User Story** maps to exactly one **Use Case**. The US defines the business need, the acceptance criteria express expected behavior (BDD), and the use case orchestrates the domain to fulfill it.
 
@@ -32,38 +71,21 @@ This project implements 5 user stories — 3 commands (writes) and 2 queries (re
 
 Each US file contains the story, BDD acceptance criteria (Given/When/Then), and links to every implementation artifact — from the aggregate down to the functional test.
 
----
-
-## Problem Space
-
-Before writing any code, DDD starts by understanding the **business domain**.
-
-Our domain is a **municipal library** that manages its book catalog and loans to members.
-
-| Subdomain | Type | Description |
-|---|---|---|
-| **Lending** | Core Domain | Book loans — the reason the library exists. Richest business rules. |
-| **Catalog** | Supporting | Book catalog — necessary but simpler. Manages available books and metadata. |
-
-See [PRD.md](./PRD.md) for the full problem space analysis.
-
----
-
-## Strategic Design
+### Strategic Design
 
 Strategic Design structures the domain into **Bounded Contexts** with their own language and models.
 
 > *"A Bounded Context is a semantic contextual boundary. This means that within the boundary each component of the software model has a specific meaning and does specific things. The components inside a Bounded Context are context specific and semantically motivated."*
 > — Vaughn Vernon, *DDD Distilled*
 
-### Bounded Contexts
+#### Bounded Contexts
 
 - **Catalog** — manages the book registry (adding, consulting)
 - **Lending** — manages members, loans and returns
 
 The concept of "Book" has a **different meaning** in each context. In Catalog, it's a rich object with ISBN, title, author. In Lending, it's a simple reference (just an identifier). This is precisely why they are separate Bounded Contexts.
 
-### Ubiquitous Language
+#### Ubiquitous Language
 
 The shared vocabulary between domain experts and developers. Each term has a precise, unambiguous meaning within its context.
 
@@ -89,7 +111,7 @@ The shared vocabulary between domain experts and developers. Each term has a pre
 | BorrowingLimit | The maximum number of books a member can borrow simultaneously |
 | BookReference | A book as seen from Lending — not the full Catalog model, just an identifier |
 
-### Context Map
+#### Context Map
 
 Catalog is **upstream** (publishes events), Lending is **downstream** (consumes them). An **Anti-Corruption Layer** in Lending translates Catalog's model into its own language.
 
@@ -113,13 +135,11 @@ This is why "Book" has a different representation in each context — as Vernon 
                                               → BookReference
 ```
 
----
-
-## Tactical Design — Building Blocks
+### Tactical Design — Building Blocks
 
 Tactical Design translates the strategic model into concrete building blocks.
 
-### Value Objects
+#### Value Objects
 
 Immutable objects defined by their value, not their identity. They validate their own invariants at construction time through a private constructor and a `create()` factory method.
 
@@ -134,7 +154,7 @@ Some VOs carry behavior beyond simple validation. `BorrowingLimit` exposes `allo
 
 See: [`isbn.vo.ts`](src/modules/catalog/domain/book/isbn.vo.ts), [`borrowing-limit.vo.ts`](src/modules/lending/domain/member/borrowing-limit.vo.ts), [`loan-period.vo.ts`](src/modules/lending/domain/loan/loan-period.vo.ts)
 
-### Aggregates
+#### Aggregates
 
 > Vernon's four rules of Aggregate design: *(1)* Protect business invariants inside Aggregate boundaries. *(2)* Design small Aggregates. *(3)* Reference other Aggregates by identity only. *(4)* Update other Aggregates using eventual consistency. — *DDD Distilled*
 
@@ -157,7 +177,7 @@ member.returnBook(loanId); // removes from internal Set
 
 See: [`book.entity.ts`](src/modules/catalog/domain/book/book.entity.ts), [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts), [`loan.entity.ts`](src/modules/lending/domain/loan/loan.entity.ts)
 
-### Domain Exceptions
+#### Domain Exceptions
 
 One class per violation, named after the business constraint. Each extends `DomainException`. No generic error messages — the exception type **is** the documentation.
 
@@ -171,7 +191,7 @@ exceptions/
 
 See: [`exceptions/`](src/modules/catalog/domain/book/exceptions/)
 
-### Business Rules as First-Class Objects
+#### Business Rules as First-Class Objects
 
 Cross-cutting business constraints are modeled as `Rule` objects — named after the constraint, testable in isolation, composable via `Rule.checkAll()`.
 
@@ -186,13 +206,13 @@ Each rule implements `isRespected()` and `createError()`. They live in the aggre
 
 See: [`member-cannot-exceed-borrowing-limit.rule.ts`](src/modules/lending/domain/member/rules/member-cannot-exceed-borrowing-limit.rule.ts), [`book-must-be-available.rule.ts`](src/modules/lending/domain/loan/rules/book-must-be-available.rule.ts)
 
-### Ports (Repository Interfaces)
+#### Ports (Repository Interfaces)
 
 Defined in the **domain layer** — the domain dictates what it needs, not the infrastructure. The repository interface is a contract that any adapter (InMemory, SQL, API) can implement.
 
 See: [`books-repository.interface.ts`](src/modules/catalog/domain/book/books-repository.interface.ts)
 
-### Domain Events
+#### Domain Events
 
 > *"A Domain Event is a record of some business-significant occurrence in a Bounded Context. [...] Your Domain Event type names should be a statement of a past occurrence, that is, a verb in the past tense."*
 > — Vaughn Vernon, *DDD Distilled*
@@ -213,7 +233,7 @@ The `DomainEventDispatcher` is a synchronous in-process pub/sub — handlers are
 
 See: [`domain-event.ts`](src/shared/domain/domain-event.ts), [`aggregate-root.ts`](src/shared/domain/aggregate-root.ts), [`domain-event-dispatcher.ts`](src/shared/infrastructure/domain-event-dispatcher.ts), [`domain-events.ts`](src/shared/domain/domain-events.ts), [`book-registered.event.ts`](src/modules/catalog/domain/book/events/book-registered.event.ts)
 
-### Anti-Corruption Layer
+#### Anti-Corruption Layer
 
 Bounded Contexts communicate exclusively through domain events — no direct cross-module imports. The ACL in Lending listens to Catalog events and translates them into Lending's own model.
 
@@ -504,6 +524,18 @@ src/
         │       └── injection-tokens.ts
         └── tests/ (unit/ + functional/)
 ```
+
+---
+
+## Non-Goals
+
+This project is a **learning tool**, not a production application. Intentionally out of scope:
+
+- Real database (InMemory repositories only — focus is on the domain, not persistence)
+- Exhaustive HTTP error handling
+- Event Sourcing
+- Microservices
+- Authentication / Authorization
 
 ---
 
