@@ -2,7 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { CLOCK, ID_GENERATOR, EVENT_DISPATCHER } from './injection-tokens.js';
 import { SystemClock } from '../system-clock.js';
 import { IdGenerator } from '../id-generator.js';
-import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { DomainEventDispatcher } from '../domain-event-dispatcher.js';
 
 @Global()
 @Module({
