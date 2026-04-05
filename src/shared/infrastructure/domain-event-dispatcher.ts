@@ -1,5 +1,5 @@
-import { DomainEvent } from './domain-event';
-import { EventHandler, SubscribableEventDispatcher } from './event-dispatcher.interface';
+import { DomainEvent } from '@shared/domain/domain-event';
+import { EventHandler, SubscribableEventDispatcher } from '@shared/domain/event-dispatcher.interface';
 
 export class DomainEventDispatcher implements SubscribableEventDispatcher {
   private readonly handlers = new Map<string, EventHandler[]>();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { DomainEventDispatcher } from '@shared/infrastructure/domain-event-dispatcher';
 import { DomainEvent } from '@shared/domain/domain-event';
 
 class FakeEvent extends DomainEvent {
