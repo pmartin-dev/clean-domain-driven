@@ -3,7 +3,7 @@ import { EventDispatcherInterface } from '@shared/domain/event-dispatcher.interf
 import { MembersRepository } from '@lending/domain/member/members-repository.interface';
 import { LoansRepository } from '@lending/domain/loan/loans-repository.interface';
 import { LoanId } from '@lending/domain/loan/loan-id.vo';
-import { ReturnBookCommand } from './return-book.command';
+import { ReturnBookCommand } from '@lending/application/commands/return-book/return-book.command';
 
 export class ReturnBook {
   constructor(

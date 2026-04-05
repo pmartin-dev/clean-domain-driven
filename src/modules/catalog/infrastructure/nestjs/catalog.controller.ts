@@ -1,27 +1,26 @@
 import { Controller, Post, Get, Body, Inject } from '@nestjs/common';
-import { COMMAND_BUS, QUERY_BUS } from '@infrastructure/nestjs/cqrs/injection-tokens';
-import { CommandBus } from '@infrastructure/nestjs/cqrs/command-bus';
-import { QueryBus } from '@infrastructure/nestjs/cqrs/query-bus';
-import { AddBookToCatalogCommand } from '@catalog/application/use-cases/commands/add-book-to-catalog/add-book-to-catalog.command';
-import { GetAvailableBooksQuery } from '@catalog/application/use-cases/queries/get-available-books/get-available-books.query';
-import { AvailableBookDto } from '@catalog/application/use-cases/queries/get-available-books/get-available-books.use-case';
+import { ADD_BOOK_TO_CATALOG, GET_AVAILABLE_BOOKS } from './injection-tokens.js';
+import { AddBookToCatalog } from '@catalog/application/use-cases/add-book-to-catalog.use-case';
+import { AddBookToCatalogCommand } from '@catalog/application/commands/add-book-to-catalog/add-book-to-catalog.command';
+import { GetAvailableBooks, AvailableBookDto } from '@catalog/application/use-cases/get-available-books.use-case';
+import { GetAvailableBooksQuery } from '@catalog/application/queries/get-available-books/get-available-books.query';
 
 @Controller('catalog/books')
 export class CatalogController {
   constructor(
-    @Inject(COMMAND_BUS) private readonly commandBus: CommandBus,
-    @Inject(QUERY_BUS) private readonly queryBus: QueryBus,
+    @Inject(ADD_BOOK_TO_CATALOG) private readonly addBookToCatalog: AddBookToCatalog,
+    @Inject(GET_AVAILABLE_BOOKS) private readonly getAvailableBooksUseCase: GetAvailableBooks,
   ) {}
 
   @Post()
   async addBook(@Body() body: { isbn: string; title: string; author: string }): Promise<{ id: string }> {
     const command = new AddBookToCatalogCommand(body.isbn, body.title, body.author);
-    const id = await this.commandBus.execute<string>(command);
+    const id = await this.addBookToCatalog.execute(command);
     return { id };
   }
 
   @Get()
   async getAvailableBooks(): Promise<AvailableBookDto[]> {
-    return this.queryBus.execute<AvailableBookDto[]>(new GetAvailableBooksQuery());
+    return this.getAvailableBooksUseCase.execute(new GetAvailableBooksQuery());
   }
 }

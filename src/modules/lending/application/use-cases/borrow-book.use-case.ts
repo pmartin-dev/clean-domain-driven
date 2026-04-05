@@ -12,7 +12,7 @@ import { LoanPeriod } from '@lending/domain/loan/loan-period.vo';
 import { BookReference } from '@lending/domain/book-reference/book-reference.vo';
 import { Loan } from '@lending/domain/loan/loan.entity';
 import { BookMustBeAvailable } from '@lending/domain/loan/rules/book-must-be-available.rule';
-import { BorrowBookCommand } from './borrow-book.command';
+import { BorrowBookCommand } from '@lending/application/commands/borrow-book/borrow-book.command';
 
 export class BorrowBook {
   constructor(

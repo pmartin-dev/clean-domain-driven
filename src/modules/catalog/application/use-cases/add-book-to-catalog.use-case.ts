@@ -6,7 +6,7 @@ import { BookId } from '@catalog/domain/book/book-id.vo';
 import { ISBN } from '@catalog/domain/book/isbn.vo';
 import { BookTitle } from '@catalog/domain/book/book-title.vo';
 import { Author } from '@catalog/domain/book/author.vo';
-import { AddBookToCatalogCommand } from './add-book-to-catalog.command';
+import { AddBookToCatalogCommand } from '@catalog/application/commands/add-book-to-catalog/add-book-to-catalog.command';
 
 export class AddBookToCatalog {
   constructor(

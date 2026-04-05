@@ -1,6 +1,6 @@
 import { BooksRepository } from '@catalog/domain/book/books-repository.interface';
 import { BorrowedBookRegistry } from '@catalog/domain/book/borrowed-book-registry.interface';
-import { GetAvailableBooksQuery } from './get-available-books.query';
+import { GetAvailableBooksQuery } from '@catalog/application/queries/get-available-books/get-available-books.query';
 
 export interface AvailableBookDto {
   id: string;

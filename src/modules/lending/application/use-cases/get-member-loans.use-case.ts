@@ -3,7 +3,7 @@ import { MembersRepository } from '@lending/domain/member/members-repository.int
 import { ClockInterface } from '@shared/domain/clock';
 import { DomainException } from '@shared/domain/domain.exception';
 import { MemberId } from '@lending/domain/member/member-id.vo';
-import { GetMemberLoansQuery } from './get-member-loans.query';
+import { GetMemberLoansQuery } from '@lending/application/queries/get-member-loans/get-member-loans.query';
 
 export interface MemberLoanDto {
   loanId: string;
