@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GetAvailableBooks, AvailableBookDto } from '@catalog/application/use-cases/queries/get-available-books/get-available-books.use-case';
-import { GetAvailableBooksQuery } from '@catalog/application/use-cases/queries/get-available-books/get-available-books.query';
+import { AvailableBookDto } from '@catalog/application/use-cases/get-available-books.use-case';
 import { BooksInMemoryRepository } from '@catalog/infrastructure/books.in-memory.repository';
 import { BorrowedBookRegistryInMemory } from '@catalog/infrastructure/borrowed-book-registry.in-memory';
 import { Book } from '@catalog/domain/book/book.entity';
@@ -8,68 +7,20 @@ import { BookId } from '@catalog/domain/book/book-id.vo';
 import { ISBN } from '@catalog/domain/book/isbn.vo';
 import { BookTitle } from '@catalog/domain/book/book-title.vo';
 import { Author } from '@catalog/domain/book/author.vo';
-import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { DomainEventDispatcher } from '@shared/infrastructure/domain-event-dispatcher';
 import { BOOK_BORROWED, BOOK_RETURNED } from '@shared/domain/domain-events';
 import { OnBookBorrowedHandler } from '@catalog/application/event-handlers/on-book-borrowed.handler';
 import { OnBookReturnedHandler } from '@catalog/application/event-handlers/on-book-returned.handler';
 import { BookBorrowedEvent } from '@lending/domain/loan/events/book-borrowed.event';
 import { BookReturnedEvent } from '@lending/domain/loan/events/book-returned.event';
 import { DomainEvent } from '@shared/domain/domain-event';
+import { GetAvailableBooksQuery } from '@catalog/application/queries/get-available-books/get-available-books.query';
+import { GetAvailableBooks } from '@catalog/application/use-cases/get-available-books.use-case';
+import { GetAvailableBooksTestBuilder } from './get-available-books.builder';
 
 class FakeEvent extends DomainEvent {
   constructor(name: string, payload: Record<string, unknown>) {
     super(name, payload);
-  }
-}
-
-interface BookSeed {
-  id: string;
-  isbn: string;
-  title: string;
-  author: string;
-}
-
-class GetAvailableBooksTestBuilder {
-  private books: BookSeed[] = [];
-  private borrowedBookIds: string[] = [];
-
-  withBook(id: string, isbn: string, title: string, author: string): this {
-    this.books.push({ id, isbn, title, author });
-    return this;
-  }
-
-  withBorrowedBook(bookId: string): this {
-    this.borrowedBookIds.push(bookId);
-    return this;
-  }
-
-  async build() {
-    const booksRepo = new BooksInMemoryRepository();
-    const registry = new BorrowedBookRegistryInMemory();
-    const eventDispatcher = new DomainEventDispatcher();
-
-    for (const seed of this.books) {
-      const book = Book.register(
-        BookId.create(seed.id),
-        ISBN.create(seed.isbn),
-        BookTitle.create(seed.title),
-        Author.create(seed.author),
-      );
-      await booksRepo.save(book);
-    }
-
-    for (const bookId of this.borrowedBookIds) {
-      await registry.markAsBorrowed(BookId.create(bookId));
-    }
-
-    const useCase = new GetAvailableBooks(booksRepo, registry);
-
-    return {
-      execute: () => useCase.execute(new GetAvailableBooksQuery()),
-      booksRepo,
-      registry,
-      eventDispatcher,
-    };
   }
 }
 

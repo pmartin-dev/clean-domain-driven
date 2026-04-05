@@ -1,59 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { ReturnBook } from '@lending/application/use-cases/commands/return-book/return-book.use-case';
-import { ReturnBookCommand } from '@lending/application/use-cases/commands/return-book/return-book.command';
+import { ReturnBook } from '@lending/application/use-cases/return-book.use-case';
+import { ReturnBookCommand } from '@lending/application/commands/return-book/return-book.command';
 import { MembersInMemoryRepository } from '@lending/infrastructure/members.in-memory.repository';
 import { LoansInMemoryRepository } from '@lending/infrastructure/loans.in-memory.repository';
-import { Member } from '@lending/domain/member/member.entity';
 import { MemberId } from '@lending/domain/member/member-id.vo';
-import { MemberName } from '@lending/domain/member/member-name.vo';
-import { BorrowingLimit } from '@lending/domain/member/borrowing-limit.vo';
 import { Loan } from '@lending/domain/loan/loan.entity';
 import { LoanId } from '@lending/domain/loan/loan-id.vo';
 import { LoanPeriod } from '@lending/domain/loan/loan-period.vo';
 import { BookReference } from '@lending/domain/book-reference/book-reference.vo';
 import { DomainException } from '@shared/domain/domain.exception';
-import { DomainEventDispatcher } from '@shared/domain/domain-event-dispatcher';
+import { DomainEventDispatcher } from '@shared/infrastructure/domain-event-dispatcher';
+import { ReturnBookTestBuilder } from './return-book.builder';
 
 const now = new Date('2026-03-18');
-
-class ReturnBookTestBuilder {
-  private loanId = 'loan-1';
-  private memberId = 'mem-1';
-  private bookId = 'book-1';
-
-  withLoanId(id: string): this { this.loanId = id; return this; }
-
-  async build() {
-    const membersRepo = new MembersInMemoryRepository();
-    const loansRepo = new LoansInMemoryRepository();
-
-    const member = Member.register(
-      MemberId.create(this.memberId),
-      MemberName.create('Alice Dupont'),
-      BorrowingLimit.create(3),
-    );
-    member.borrow(LoanId.create(this.loanId), false);
-    await membersRepo.save(member);
-
-    const loan = Loan.create(
-      LoanId.create(this.loanId),
-      MemberId.create(this.memberId),
-      BookReference.create(this.bookId),
-      LoanPeriod.createFromNow(now),
-    );
-    await loansRepo.save(loan);
-
-    const eventDispatcher = new DomainEventDispatcher();
-    const useCase = new ReturnBook(loansRepo, membersRepo, eventDispatcher);
-
-    return {
-      execute: () => useCase.execute(new ReturnBookCommand(this.loanId)),
-      membersRepo,
-      loansRepo,
-      eventDispatcher,
-    };
-  }
-}
 
 describe('ReturnBook', () => {
   it('marks the loan as returned', async () => {
