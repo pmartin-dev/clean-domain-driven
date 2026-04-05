@@ -11,7 +11,7 @@
     "test:unit": "vitest tests/unit",
     "test:functional": "vitest tests/functional",
     "typecheck": "tsc --noEmit",
-    "start": "tsx src/infrastructure/nestjs/main.ts"
+    "start": "tsx src/shared/infrastructure/nestjs/main.ts"
   },
   "devDependencies": {
     "@types/express": "5.0.6",

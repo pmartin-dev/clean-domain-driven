@@ -6,6 +6,8 @@ This repository walks through the DDD methodology — from understanding the bus
 
 **Target audience:** developers who can code but want to understand DDD in practice.
 
+> **Note:** This project is opinionated by design. The patterns and conventions shown here are one way to implement DDD — not the only way. Treat them as a starting point to adapt and evolve, not as rigid principles set in stone.
+
 ---
 
 ## From User Stories to Code
@@ -187,7 +189,7 @@ Events follow the naming convention `module::action` and carry minimal payload (
 
 The `DomainEventDispatcher` is a synchronous in-process pub/sub — handlers are registered with `subscribe(eventName, handler)` and called sequentially on `dispatch()`.
 
-See: [`domain-event.ts`](src/shared/domain/domain-event.ts), [`aggregate-root.ts`](src/shared/domain/aggregate-root.ts), [`domain-event-dispatcher.ts`](src/shared/domain/domain-event-dispatcher.ts), [`domain-events.ts`](src/shared/domain/domain-events.ts), [`book-registered.event.ts`](src/modules/catalog/domain/book/events/book-registered.event.ts)
+See: [`domain-event.ts`](src/shared/domain/domain-event.ts), [`aggregate-root.ts`](src/shared/domain/aggregate-root.ts), [`domain-event-dispatcher.ts`](src/shared/infrastructure/domain-event-dispatcher.ts), [`domain-events.ts`](src/shared/domain/domain-events.ts), [`book-registered.event.ts`](src/modules/catalog/domain/book/events/book-registered.event.ts)
 
 ### Anti-Corruption Layer
 
@@ -221,6 +223,8 @@ Interface (NestJS controllers)                ← calls application layer
 
 **Domain First:** the domain was developed in isolation — pure TypeScript, zero framework imports. NestJS was added **after** the domain was stabilized and tested. This means you can change the framework, database or deployment without touching a single line of domain code.
 
+**Why no Presenter?** In classic Clean Architecture, a Presenter transforms the use case output into a format suited to a specific delivery channel (REST, GraphQL, CLI...). Here, use cases return lightweight **DTOs** directly — the mapping from domain objects to response format happens inside the use case itself. This is intentional: with a single delivery channel (REST) and trivial mappings, a dedicated Presenter layer would add indirection without value. If the project later needs to serve the same use case through multiple channels with different response formats, Presenters could be introduced at that point.
+
 See: [`domain/`](src/modules/catalog/domain/), [`application/`](src/modules/catalog/application/), [`infrastructure/`](src/modules/catalog/infrastructure/)
 
 ---
@@ -231,22 +235,26 @@ Clean Architecture and CQRS operate at different levels:
 - **Clean Architecture** structures **layers** — the use case is the central concept
 - **CQRS** structures **intent** — separating writes (commands) from reads (queries)
 
-They coexist: `use-cases/` is the parent directory (Clean Architecture), `commands/` and `queries/` organize by intent inside it (CQRS).
+The separation is **structural** — expressed through folder organization and naming conventions — not runtime. There is no command bus or query bus: controllers inject use cases directly via NestJS dependency injection.
 
 ```
-application/use-cases/
-  ├── commands/                              ← writes (go through the domain)
+application/
+  ├── commands/                              ← input DTOs for writes
   │   └── add-book-to-catalog/
-  │       ├── add-book-to-catalog.command.ts    (input DTO)
-  │       └── add-book-to-catalog.use-case.ts   (orchestration)
-  └── queries/                               ← reads (direct, no domain)
-      └── ...
+  │       └── add-book-to-catalog.command.ts
+  ├── queries/                               ← input DTOs for reads
+  │   └── get-available-books/
+  │       └── get-available-books.query.ts
+  ├── use-cases/                             ← orchestration
+  │   ├── add-book-to-catalog.use-case.ts       (command: goes through domain)
+  │   └── get-available-books.use-case.ts       (query: reads directly from repos)
+  └── event-handlers/                        ← reacts to cross-BC events
 ```
 
 - **Command use case:** creates VOs, calls the aggregate, persists via repository port
 - **Query use case:** reads directly from repository, returns a DTO, never touches the domain
 
-See: [`add-book-to-catalog/`](src/modules/catalog/application/use-cases/commands/add-book-to-catalog/), [`borrow-book/`](src/modules/lending/application/use-cases/commands/borrow-book/), [`return-book/`](src/modules/lending/application/use-cases/commands/return-book/)
+See: [`commands/`](src/modules/catalog/application/commands/), [`queries/`](src/modules/catalog/application/queries/), [`use-cases/`](src/modules/catalog/application/use-cases/)
 
 ---
 
@@ -267,11 +275,17 @@ Use cases are constructed through `useFactory` providers that inject domain port
 }
 ```
 
-### Custom CQRS Buses
+Controllers inject use cases directly via injection tokens — no intermediary bus or dispatcher:
 
-A simple `CommandBus` and `QueryBus` dispatch commands/queries to the appropriate use case by class name. Controllers depend on the bus interfaces — they don't know which use case handles which command.
-
-See: [`command-bus.ts`](src/infrastructure/nestjs/cqrs/command-bus.ts), [`query-bus.ts`](src/infrastructure/nestjs/cqrs/query-bus.ts)
+```typescript
+@Controller('catalog/books')
+export class CatalogController {
+  constructor(
+    @Inject(ADD_BOOK_TO_CATALOG) private readonly addBookToCatalog: AddBookToCatalog,
+    @Inject(GET_AVAILABLE_BOOKS) private readonly getAvailableBooksUseCase: GetAvailableBooks,
+  ) {}
+}
+```
 
 ### Cross-BC Event Wiring
 
@@ -289,7 +303,7 @@ Each NestJS module subscribes its event handlers to the shared `DomainEventDispa
 
 Domain exceptions are caught by a global `DomainExceptionFilter` and returned as HTTP 400 responses.
 
-See: [`catalog.controller.ts`](src/modules/catalog/infrastructure/nestjs/catalog.controller.ts), [`lending.controller.ts`](src/modules/lending/infrastructure/nestjs/lending.controller.ts), [`catalog.module.ts`](src/modules/catalog/infrastructure/nestjs/catalog.module.ts), [`lending.module.ts`](src/modules/lending/infrastructure/nestjs/lending.module.ts)
+See: [`catalog.controller.ts`](src/modules/catalog/infrastructure/nestjs/catalog.controller.ts), [`lending.controller.ts`](src/modules/lending/infrastructure/nestjs/lending.controller.ts), [`catalog.module.ts`](src/modules/catalog/infrastructure/nestjs/catalog.module.ts), [`lending.module.ts`](src/modules/lending/infrastructure/nestjs/lending.module.ts), [`shared.module.ts`](src/shared/infrastructure/nestjs/shared.module.ts)
 
 ---
 
@@ -322,6 +336,62 @@ See: [`add-book-to-catalog.test.ts`](src/modules/catalog/tests/functional/add-bo
 
 ---
 
+## Conventions
+
+Quick reference for the patterns and naming used throughout the codebase.
+
+### File Naming
+
+`kebab-case` with semantic suffixes: `.entity.ts`, `.vo.ts`, `.rule.ts`, `.interface.ts`, `.use-case.ts`, `.command.ts`, `.query.ts`, `.event.ts`, `.exception.ts`
+
+### Module Isolation
+
+One module = one Bounded Context. **No direct imports between modules.** `catalog/` doesn't know `lending/` exists and vice versa. Cross-BC communication goes exclusively through domain events via the shared `DomainEventDispatcher`.
+
+### Value Object Pattern
+
+```typescript
+export class ISBN {
+  private constructor(private readonly _value: string) {}  // private constructor
+  static create(value: string): ISBN { /* validate, then */ return new ISBN(value); }
+  get value(): string { return this._value; }
+  equals(other: ISBN): boolean { return this._value === other._value; }
+}
+```
+
+### Aggregate Pattern
+
+```typescript
+export class Book extends AggregateRoot {
+  private constructor(/* ... */) { super(); }            // private constructor
+  static register(/* ... */): Book { /* factory */ }     // domain verb as factory
+  // State changes via named behavior methods, not setters
+}
+```
+
+### Business Rule Pattern
+
+```typescript
+export class BookMustBeAvailable extends Rule {
+  isRespected(): boolean { return !this.isAlreadyBorrowed; }
+  createError(): DomainException { return new BookAlreadyBorrowed(); }
+}
+```
+
+### Port Pattern (Repository Interfaces)
+
+Defined in the **domain layer** — parameters and returns typed with domain VOs, not primitives:
+
+```typescript
+export interface BooksRepository {
+  save(book: Book): Promise<void>;
+  findById(id: BookId): Promise<Book | null>;
+  findAll(): Promise<Book[]>;
+}
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -330,7 +400,6 @@ src/
 │   ├── domain/                             # Base classes & ports shared across BCs
 │   │   ├── domain-event.ts                 # Abstract DomainEvent (immutable)
 │   │   ├── aggregate-root.ts               # AggregateRoot (raise/pull events)
-│   │   ├── domain-event-dispatcher.ts      # In-process pub/sub for domain events
 │   │   ├── domain-events.ts               # Event name constants (BOOK_REGISTERED, ...)
 │   │   ├── event-dispatcher.interface.ts   # EventDispatcherInterface, SubscribableEventDispatcher
 │   │   ├── rule.ts                         # Abstract Rule (business rules pattern)
@@ -338,22 +407,16 @@ src/
 │   │   ├── id-generator.ts                 # Port: ID generation
 │   │   └── clock.ts                        # Port: time access
 │   └── infrastructure/
+│       ├── domain-event-dispatcher.ts      # SubscribableEventDispatcher implementation
 │       ├── system-clock.ts                 # ClockInterface implementation
 │       ├── id-generator.ts                 # IdGeneratorInterface implementation (UUID v7)
 │       └── nestjs/
+│           ├── main.ts                     # Application entry point
+│           ├── app.module.ts               # Root module
 │           ├── shared.module.ts            # @Global module (Clock, IdGenerator, EventDispatcher)
-│           └── injection-tokens.ts
-│
-├── infrastructure/nestjs/                  # NestJS bootstrap & cross-cutting
-│   ├── main.ts                             # Application entry point
-│   ├── app.module.ts                       # Root module
-│   ├── cqrs/
-│   │   ├── command-bus.ts                  # CommandBus interface + SimpleCommandBus
-│   │   ├── query-bus.ts                    # QueryBus interface + SimpleQueryBus
-│   │   ├── cqrs.module.ts                 # @Global CQRS module
-│   │   └── injection-tokens.ts
-│   └── filters/
-│       └── domain-exception.filter.ts      # DomainException → HTTP 400
+│           ├── injection-tokens.ts
+│           └── filters/
+│               └── domain-exception.filter.ts  # DomainException → HTTP 400
 │
 └── modules/
     ├── catalog/                            # Bounded Context: Catalog (Supporting)
@@ -365,15 +428,18 @@ src/
     │   │   ├── events/book-registered.event.ts
     │   │   └── exceptions/
     │   ├── application/
-    │   │   ├── use-cases/commands/add-book-to-catalog/
-    │   │   ├── use-cases/queries/get-available-books/
+    │   │   ├── commands/add-book-to-catalog/    # Input DTO (CQRS write)
+    │   │   ├── queries/get-available-books/     # Input DTO (CQRS read)
+    │   │   ├── use-cases/                       # Orchestration
+    │   │   │   ├── add-book-to-catalog.use-case.ts
+    │   │   │   └── get-available-books.use-case.ts
     │   │   └── event-handlers/             # Reacts to lending::book-borrowed/returned
     │   ├── infrastructure/
     │   │   ├── books.in-memory.repository.ts
     │   │   ├── borrowed-book-registry.in-memory.ts
     │   │   └── nestjs/                     # NestJS wiring
-    │   │       ├── catalog.module.ts       # Providers, event subscriptions, bus registration
-    │   │       ├── catalog.controller.ts   # REST endpoints
+    │   │       ├── catalog.module.ts       # Providers, event subscriptions
+    │   │       ├── catalog.controller.ts   # REST endpoints (injects use cases directly)
     │   │       └── injection-tokens.ts
     │   └── tests/ (unit/ + functional/)
     │
@@ -396,17 +462,20 @@ src/
         │       ├── book-reference.vo.ts
         │       └── book-references-repository.interface.ts
         ├── application/
-        │   ├── event-handlers/on-book-registered.handler.ts  # ACL handler
-        │   └── use-cases/
-        │       ├── commands/borrow-book/, return-book/
-        │       └── queries/get-member-loans/
+        │   ├── commands/borrow-book/, return-book/  # Input DTOs (CQRS writes)
+        │   ├── queries/get-member-loans/            # Input DTO (CQRS read)
+        │   ├── use-cases/                           # Orchestration
+        │   │   ├── borrow-book.use-case.ts
+        │   │   ├── return-book.use-case.ts
+        │   │   └── get-member-loans.use-case.ts
+        │   └── event-handlers/on-book-registered.handler.ts  # ACL handler
         ├── infrastructure/
         │   ├── members.in-memory.repository.ts
         │   ├── loans.in-memory.repository.ts
         │   ├── book-references.in-memory.repository.ts
         │   └── nestjs/                     # NestJS wiring
-        │       ├── lending.module.ts
-        │       ├── lending.controller.ts
+        │       ├── lending.module.ts       # Providers, event subscriptions
+        │       ├── lending.controller.ts   # REST endpoints (injects use cases directly)
         │       └── injection-tokens.ts
         └── tests/ (unit/ + functional/)
 ```

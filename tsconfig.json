@@ -18,8 +18,7 @@
     "paths": {
       "@shared/*": ["src/shared/*"],
       "@catalog/*": ["src/modules/catalog/*"],
-      "@lending/*": ["src/modules/lending/*"],
-      "@infrastructure/*": ["src/infrastructure/*"]
+      "@lending/*": ["src/modules/lending/*"]
     }
   },
   "include": ["src"],
