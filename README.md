@@ -1,5 +1,7 @@
 # Clean Domain-Driven
 
+[![CI](https://github.com/pmartin-dev/clean-domain-driven/actions/workflows/ci.yml/badge.svg)](https://github.com/pmartin-dev/clean-domain-driven/actions/workflows/ci.yml)
+
 A production-ready reference implementation of Domain-Driven Design with Clean Architecture and CQRS in TypeScript — using a library lending system as a concrete domain.
 
 This repository walks through the DDD methodology — from understanding the business domain to implementing it in code — using a library book lending system as a concrete example.
