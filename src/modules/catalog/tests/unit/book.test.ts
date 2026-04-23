@@ -14,9 +14,11 @@ describe('Book', () => {
       Author.create('Robert C. Martin'),
     );
 
-    expect(book.id.equals(BookId.create('book-1'))).toBe(true);
-    expect(book.isbn.equals(ISBN.create('9780134685991'))).toBe(true);
-    expect(book.title.equals(BookTitle.create('Clean Code'))).toBe(true);
-    expect(book.author.equals(Author.create('Robert C. Martin'))).toBe(true);
+    expect(book.toSnapshot()).toEqual({
+      id: 'book-1',
+      isbn: '9780134685991',
+      title: 'Clean Code',
+      author: 'Robert C. Martin',
+    });
   });
 });

@@ -21,13 +21,15 @@ describe('BorrowBook', () => {
     expect(loan!.isActive()).toBe(true);
   });
 
-  it('increments member active loan count', async () => {
-    const { execute, membersRepo } = await new BorrowBookTestBuilder().build();
+  it('adds the loan to member active loans', async () => {
+    const { execute, membersRepo } = await new BorrowBookTestBuilder()
+      .withGeneratedLoanId('loan-42')
+      .build();
 
     await execute();
 
     const member = await membersRepo.findById(MemberId.create('mem-1'));
-    expect(member!.activeLoanCount).toBe(1);
+    expect(member!.hasActiveLoan(LoanId.create('loan-42'))).toBe(true);
   });
 
   it('rejects when member has reached borrowing limit', async () => {

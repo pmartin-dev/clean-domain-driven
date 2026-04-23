@@ -24,13 +24,13 @@ describe('ReturnBook', () => {
     expect(loan!.isActive()).toBe(false);
   });
 
-  it('decreases the member active loan count', async () => {
+  it('removes the loan from member active loans', async () => {
     const { execute, membersRepo } = await new ReturnBookTestBuilder().build();
 
     await execute();
 
     const member = await membersRepo.findById(MemberId.create('mem-1'));
-    expect(member!.activeLoanCount).toBe(0);
+    expect(member!.hasActiveLoan(LoanId.create('loan-1'))).toBe(false);
   });
 
   it('rejects when loan does not exist', async () => {

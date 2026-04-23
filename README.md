@@ -363,9 +363,7 @@ member.borrow(loanId, hasOverdueLoans);
 
 `Member.borrow()` encapsulates the borrowing limit check inside the aggregate — the caller doesn't need to know the rule exists, let alone how to enforce it.
 
-**Pragmatic exception: getters for reading and persistence.** Value Objects need a `get value()` accessor so that infrastructure layers (repositories, DTO mapping) can read them. Aggregates in Supporting Subdomains (like `Book` in Catalog) may also expose getters when their role is primarily to store and retrieve data. The principle applies most strictly to **Core Domain aggregates with behavior** — these should never expose internal state that enables external decision-making.
-
-See: [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts) (Tell), [`book.entity.ts`](src/modules/catalog/domain/book/book.entity.ts) (pragmatic getters)
+See: [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts)
 
 ### No Primitive Obsession
 

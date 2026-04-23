@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { BookId } from '@catalog/domain/book/book-id.vo';
-import { BookTitle } from '@catalog/domain/book/book-title.vo';
 import { DomainException } from '@shared/domain/domain.exception';
 import { DomainEvent } from '@shared/domain/domain-event';
 import { BOOK_REGISTERED } from '@shared/domain/domain-events';
@@ -17,7 +16,7 @@ describe('AddBookToCatalog', () => {
     expect(result).toBe('book-42');
     const persisted = await repository.findById(BookId.create('book-42'));
     expect(persisted).not.toBeNull();
-    expect(persisted!.title.equals(BookTitle.create('Clean Code'))).toBe(true);
+    expect(persisted!.toSnapshot().title).toBe('Clean Code');
   });
 
   it('rejects a book with an invalid ISBN', async () => {

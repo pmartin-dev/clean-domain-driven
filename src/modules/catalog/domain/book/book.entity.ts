@@ -25,15 +25,12 @@ export class Book extends AggregateRoot {
     return this._id;
   }
 
-  get isbn(): ISBN {
-    return this._isbn;
-  }
-
-  get title(): BookTitle {
-    return this._title;
-  }
-
-  get author(): Author {
-    return this._author;
+  toSnapshot(): { id: string; isbn: string; title: string; author: string } {
+    return {
+      id: this._id.value,
+      isbn: this._isbn.value,
+      title: this._title.value,
+      author: this._author.value,
+    };
   }
 }

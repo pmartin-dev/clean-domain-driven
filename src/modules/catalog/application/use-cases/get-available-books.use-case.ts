@@ -21,11 +21,6 @@ export class GetAvailableBooks {
 
     return books
       .filter((book) => !borrowedIds.has(book.id.value))
-      .map((book) => ({
-        id: book.id.value,
-        isbn: book.isbn.value,
-        title: book.title.value,
-        author: book.author.value,
-      }));
+      .map((book) => book.toSnapshot());
   }
 }

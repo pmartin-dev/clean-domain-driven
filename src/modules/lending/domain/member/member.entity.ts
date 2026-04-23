@@ -41,19 +41,7 @@ export class Member extends AggregateRoot {
     return this._activeLoans.has(loanId.value);
   }
 
-  get activeLoanCount(): number {
-    return this._activeLoans.size;
-  }
-
   get id(): MemberId {
     return this._id;
-  }
-
-  get name(): MemberName {
-    return this._name;
-  }
-
-  get borrowingLimit(): BorrowingLimit {
-    return this._borrowingLimit;
   }
 }
