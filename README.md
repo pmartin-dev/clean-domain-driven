@@ -24,6 +24,7 @@ A production-ready reference implementation of Domain-Driven Design with Clean A
 - [Clean Architecture](#clean-architecture)
 - [CQS - Living with Clean Architecture](#cqs---living-with-clean-architecture)
 - [Principles](#principles)
+  - [No Anemic Domain Model](#no-anemic-domain-model)
   - [Tell, Don't Ask](#tell-dont-ask)
   - [No Primitive Obsession](#no-primitive-obsession)
   - [Always Valid](#always-valid)
@@ -182,8 +183,8 @@ const book = Book.register(id, isbn, title, author);
 
 // Lending: rich aggregate with behavior and internal state
 const member = Member.register(id, name, BorrowingLimit.create(3));
-member.borrow(loanId);    // validates limit, adds to internal Set
-member.returnBook(loanId); // removes from internal Set
+member.borrow(loanId, hasOverdueLoans); // validates rules, adds to internal Set
+member.returnBook(loanId);              // removes from internal Set
 ```
 
 `Member` maintains a `Set<LoanId>` internally, it's its own consistency boundary. The borrowing limit rule is checked **inside** the aggregate, not in the use case.
@@ -343,6 +344,55 @@ See: [`commands/`](src/modules/catalog/application/commands/), [`queries/`](src/
 
 ## Principles
 
+### No Anemic Domain Model
+
+> *"The fundamental horror of this anti-pattern is that it's so contrary to the basic idea of object-oriented design; which is to combine data and process together. The anemic domain model is really just a procedural style design [...] The key point is that the Service Layer is thin — all the key logic lies in the domain layer."*
+> - Martin Fowler, [Anemic Domain Model](https://martinfowler.com/bliki/AnemicDomainModel.html)
+
+An Anemic Domain Model looks like a real domain model — entities with fields and relationships — but the objects carry **no behavior**. Business logic lives in service classes that manipulate entity data from the outside, turning the domain into a set of data structures with getters and setters.
+
+The result is procedural code disguised as object-oriented code: services pull state out of entities, make decisions externally, then push updates back in — a violation of [Tell, Don't Ask](#tell-dont-ask).
+
+```typescript
+// ❌ Anemic: Member is a data bag, logic lives in BorrowingService
+class Member {
+  activeLoans: LoanId[] = [];
+  borrowingLimit: number;
+}
+
+class BorrowingService {
+  borrow(member: Member, loanId: LoanId, hasOverdueLoans: boolean) {
+    if (member.activeLoans.length >= member.borrowingLimit) {
+      throw new MemberHasReachedBorrowingLimit();
+    }
+    if (hasOverdueLoans) {
+      throw new MemberHasOverdueLoans();
+    }
+    member.activeLoans.push(loanId);
+  }
+}
+
+// ✅ Rich: Member owns its state AND the rules that govern it
+class Member extends AggregateRoot {
+  private readonly _activeLoans: Set<string>;
+  private readonly _borrowingLimit: BorrowingLimit;
+
+  borrow(loanId: LoanId, hasOverdueLoans: boolean): void {
+    Rule.checkAll([
+      new MemberCannotExceedBorrowingLimit(this._activeLoans.size, this._borrowingLimit),
+      new MemberMustNotHaveOverdueLoans(hasOverdueLoans),
+    ]);
+    this._activeLoans.add(loanId.value);
+  }
+}
+```
+
+In the anemic version, `Member` exposes its internals and a service orchestrates the rules. In the rich version, `Member.borrow()` **encapsulates** both state and behavior — the caller doesn't need to know how borrowing limits work. The rules are co-located with the data they protect, making them impossible to bypass.
+
+This distinction runs through the entire codebase: `Loan.markReturned()` validates and transitions its own state, `LoanPeriod.isOverdue()` owns its temporal logic, `BorrowingLimit.allows()` decides its own constraint. No external service pulls data out to make these decisions.
+
+See: [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts), [`loan.entity.ts`](src/modules/lending/domain/loan/loan.entity.ts), [`borrowing-limit.vo.ts`](src/modules/lending/domain/member/borrowing-limit.vo.ts)
+
 ### Tell, Don't Ask
 
 > *"Rather than asking an object for data and acting on that data, we should instead tell an object what to do."*
@@ -351,19 +401,23 @@ See: [`commands/`](src/modules/catalog/application/commands/), [`queries/`](src/
 Objects should expose **behavior**, not data. Instead of pulling state out and making decisions externally, tell the object to do the work — it already knows its own invariants.
 
 ```typescript
-// ❌ Ask: extract state, decide outside
-if (member.activeLoanCount < member.borrowingLimit.value) {
-  member.addLoan(loanId);
+// ❌ Ask: pull state out, decide in the use case
+if (loan.isActive()) {
+  loan.setActive(false);
+  loan.setReturnedAt(now);
+  eventDispatcher.dispatch(new BookReturnedEvent(...));
 }
 
-// ✅ Tell: delegate the decision to the object that owns the state
-member.borrow(loanId, hasOverdueLoans);
-// internally checks borrowing limit, throws if violated
+// ✅ Tell: the object manages its own state transition
+loan.markReturned();
+// internally validates, flips status, raises the domain event
 ```
 
-`Member.borrow()` encapsulates the borrowing limit check inside the aggregate — the caller doesn't need to know the rule exists, let alone how to enforce it.
+`Loan.markReturned()` encapsulates the state transition, the validation (`LoanIsAlreadyReturned`), and the event raising — the caller doesn't need to know the internals.
 
-See: [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts)
+This principle complements [No Anemic Domain Model](#no-anemic-domain-model): the Anemic anti-pattern is the structural cause, Tell Don't Ask is the design guideline that prevents it.
+
+See: [`loan.entity.ts`](src/modules/lending/domain/loan/loan.entity.ts), [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts)
 
 ### No Primitive Obsession
 
@@ -654,5 +708,6 @@ This project is a **learning tool**, not a production application. Intentionally
 - Vernon, V. (2013). *Implementing Domain-Driven Design*. Addison-Wesley.
 - Vernon, V. (2016). *Domain-Driven Design Distilled*. Addison-Wesley.
 - Fowler, M. (2018). *Refactoring: Improving the Design of Existing Code* (2nd ed.). Addison-Wesley.
+- Fowler, M. (2003). [Anemic Domain Model](https://martinfowler.com/bliki/AnemicDomainModel.html). martinfowler.com.
 - Fowler, M. (2013). [Tell Don't Ask](https://martinfowler.com/bliki/TellDontAsk.html). martinfowler.com.
 - Young, G. (2009). [Always Valid](https://codebetter.com/gregyoung/2009/05/22/always-valid/). codebetter.com.
