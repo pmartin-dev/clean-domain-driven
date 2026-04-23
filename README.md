@@ -9,7 +9,7 @@ A production-ready reference implementation of Domain-Driven Design with Clean A
 **Note:** This project is opinionated by design. The patterns and conventions shown here are one way to implement DDD, not the only way. Treat them as a starting point to adapt and evolve, not as rigid principles set in stone.
 
 > *"The alternative to good design is bad design, not no design at all."*
-> - Douglas Martin, cited i
+> - Douglas Martin
 
 ## Table of Contents
 
@@ -20,10 +20,14 @@ A production-ready reference implementation of Domain-Driven Design with Clean A
 - [Solution Space](#solution-space)
   - [From User Stories to Code](#from-user-stories-to-code)
   - [Strategic Design](#strategic-design)
-  - [Tactical Design - Building Blocks](#tactical-design--building-blocks)
+  - [Tactical Design - Building Blocks](#tactical-design---building-blocks)
 - [Clean Architecture](#clean-architecture)
-- [CQS - Living with Clean Architecture](#cqrs--living-with-clean-architecture)
-- [NestJS - Infrastructure Framework](#nestjs--infrastructure-framework)
+- [CQS - Living with Clean Architecture](#cqs---living-with-clean-architecture)
+- [Principles](#principles)
+  - [Tell, Don't Ask](#tell-dont-ask)
+  - [No Primitive Obsession](#no-primitive-obsession)
+  - [Always Valid](#always-valid)
+- [NestJS - Infrastructure Framework](#nestjs---infrastructure-framework)
 - [Testing](#testing)
 - [Conventions](#conventions)
 - [Project Structure](#project-structure)
@@ -154,11 +158,13 @@ Tactical Design translates the strategic model into concrete building blocks.
 Immutable objects defined by their value, not their identity. They validate their own invariants at construction time through a private constructor and a `create()` factory method.
 
 ```typescript
-const isbn = ISBN.create('9780134685991'),  // valid, object created
-const bad  = ISBN.create('invalid'),         // throws ISBNMustBeExactly13Digits
+const isbn = ISBN.create('9780134685991');  // valid, object created
+const bad  = ISBN.create('invalid');         // throws ISBNMustBeExactly13Digits
 ```
 
 Each Value Object provides `equals()` for comparison, no primitive comparisons leaking out.
+
+Value Objects are the main weapon against [Primitive Obsession](#no-primitive-obsession) and enforce the [Always Valid](#always-valid) principle — once created, they cannot exist in an invalid state.
 
 Some Value Objects carry behavior beyond simple validation. `BorrowingLimit` exposes `allows(currentCount)` and `LoanPeriod` exposes `isOverdue(now)`, so domain logic lives in the Value Objects, not in services.
 
@@ -172,12 +178,12 @@ Consistency boundaries. The constructor is private, the only way in is through a
 
 ```typescript
 // Catalog: simple aggregate, no mutations
-const book = Book.register(id, isbn, title, author),
+const book = Book.register(id, isbn, title, author);
 
 // Lending: rich aggregate with behavior and internal state
-const member = Member.register(id, name, BorrowingLimit.create(3)),
-member.borrow(loanId),    // validates limit, adds to internal Set
-member.returnBook(loanId), // removes from internal Set
+const member = Member.register(id, name, BorrowingLimit.create(3));
+member.borrow(loanId);    // validates limit, adds to internal Set
+member.returnBook(loanId); // removes from internal Set
 ```
 
 `Member` maintains a `Set<LoanId>` internally, it's its own consistency boundary. The borrowing limit rule is checked **inside** the aggregate, not in the use case.
@@ -200,7 +206,7 @@ See: [`exceptions/`](src/modules/catalog/domain/book/exceptions/)
 
 #### Business Rules as First-Class Objects (Specification Pattern)
 
-Cross-cutting business constraints are modeled as `Rule` objects , an assertion-based variant of the [Specification Pattern](https://en.wikipedia.org/wiki/Specification_pattern). Each rule encapsulates a single business constraint, is named after it, testable in isolation, and composable via `Rule.checkAll()`.
+Cross-cutting business constraints are modeled as `Rule` objects, an assertion-based variant of the [Specification Pattern](https://en.wikipedia.org/wiki/Specification_pattern). Each rule encapsulates a single business constraint, is named after it, testable in isolation, and composable via `Rule.checkAll()`.
 
 Unlike the classic Specification pattern (which returns a boolean for querying/filtering), these rules **throw a typed domain exception** when violated, making them guard clauses rather than predicates. This is closer to what Vernon calls "assertion-based validation" in *Implementing Domain-Driven Design*.
 
@@ -208,7 +214,7 @@ Unlike the classic Specification pattern (which returns a boolean for querying/f
 Rule.checkAll([
   new BookMustBeAvailable(existingLoan !== null),
   new MemberMustNotHaveOverdueLoans(hasOverdue),
-]),
+]);
 ```
 
 Each rule implements `isRespected()` and `createError()`. They live in the aggregate they protect: `MemberCannotExceedBorrowingLimit` is checked inside `Member.borrow()`, while `BookMustBeAvailable` is checked in the `BorrowBook` use case (it requires a repository query).
@@ -217,9 +223,19 @@ See: [`member-cannot-exceed-borrowing-limit.rule.ts`](src/modules/lending/domain
 
 #### Ports (Repository Interfaces)
 
-Defined in the **domain layer**, the domain dictates what it needs, not the infrastructure. The repository interface is a contract that any adapter (InMemory, SQL, API) can implement.
+Defined in the **domain layer**, the domain dictates what it needs, not the infrastructure. The repository interface is a contract that any adapter (InMemory, SQL, API) can implement. Parameters and return types use domain Value Objects, not primitives.
 
-See: [`books-repository.interface.ts`](src/modules/catalog/domain/book/books-repository.interface.ts)
+```typescript
+export interface BooksRepository {
+  save(book: Book): Promise<void>;
+  findById(id: BookId): Promise<Book | null>;
+  findAll(): Promise<Book[]>;
+}
+```
+
+This is the [Dependency Inversion Principle](#clean-architecture) in action: the domain defines the abstraction, the infrastructure provides the implementation. Swapping from InMemory to PostgreSQL means writing a new adapter — the domain never changes.
+
+See: [`books-repository.interface.ts`](src/modules/catalog/domain/book/books-repository.interface.ts), [`loans-repository.interface.ts`](src/modules/lending/domain/loan/loans-repository.interface.ts), [`members-repository.interface.ts`](src/modules/lending/domain/member/members-repository.interface.ts)
 
 #### Domain Events
 
@@ -230,21 +246,21 @@ Immutable events raised by aggregates after state changes. Each aggregate extend
 
 ```typescript
 // Inside Book.register()
-book.raise(new BookRegisteredEvent(id.value)),
+book.raise(new BookRegisteredEvent(id.value));
 
 // In the use case, after persistence
-await this.eventDispatcher.dispatch(book.pullDomainEvents()),
+await this.eventDispatcher.dispatch(book.pullDomainEvents());
 ```
 
 When a use case involves multiple aggregates, events are collected from all of them before dispatch, the **"collect then dispatch"** pattern. Aggregates never publish events themselves, they accumulate them via `raise()`, and the use case drains them with `pullDomainEvents()` after persistence succeeds. This guarantees that the rest of the system is only notified if the state changes were actually persisted.
 
 ```typescript
 // BorrowBook use case: two aggregates mutated, events collected then dispatched
-const events = [...loan.pullDomainEvents(), ...member.pullDomainEvents()],
+const events = [...loan.pullDomainEvents(), ...member.pullDomainEvents()];
 
-await this.loansRepository.save(loan),
-await this.membersRepository.save(member),
-await this.eventDispatcher.dispatch(events),
+await this.loansRepository.save(loan);
+await this.membersRepository.save(member);
+await this.eventDispatcher.dispatch(events);
 ```
 
 Events follow the naming convention `module::action` and carry minimal payload (IDs only). Event names are defined as shared constants in [`domain-events.ts`](src/shared/domain/domain-events.ts) to prevent silent drift between publishers and subscribers.
@@ -260,7 +276,7 @@ Bounded Contexts communicate exclusively through domain events, no direct cross-
 ```typescript
 // When Catalog publishes catalog::book-registered,
 // Lending's handler creates a BookReference from the bookId
-dispatcher.subscribe(BOOK_REGISTERED, (event) => handler.handle(event)),
+dispatcher.subscribe(BOOK_REGISTERED, (event) => handler.handle(event));
 ```
 
 This means adding a book to the Catalog automatically creates a `BookReference` in Lending, the two contexts stay in sync without coupling.
@@ -322,6 +338,82 @@ application/
 - **Query use case:** reads directly from repository, returns a DTO, never touches the domain
 
 See: [`commands/`](src/modules/catalog/application/commands/), [`queries/`](src/modules/catalog/application/queries/), [`use-cases/`](src/modules/catalog/application/use-cases/)
+
+---
+
+## Principles
+
+### Tell, Don't Ask
+
+> *"Rather than asking an object for data and acting on that data, we should instead tell an object what to do."*
+> - Martin Fowler, [Tell Don't Ask](https://martinfowler.com/bliki/TellDontAsk.html)
+
+Objects should expose **behavior**, not data. Instead of pulling state out and making decisions externally, tell the object to do the work — it already knows its own invariants.
+
+```typescript
+// ❌ Ask: extract state, decide outside
+if (member.activeLoanCount < member.borrowingLimit.value) {
+  member.addLoan(loanId);
+}
+
+// ✅ Tell: delegate the decision to the object that owns the state
+member.borrow(loanId, hasOverdueLoans);
+// internally checks borrowing limit, throws if violated
+```
+
+`Member.borrow()` encapsulates the borrowing limit check inside the aggregate — the caller doesn't need to know the rule exists, let alone how to enforce it.
+
+**Pragmatic exception: getters for reading and persistence.** Value Objects need a `get value()` accessor so that infrastructure layers (repositories, DTO mapping) can read them. Aggregates in Supporting Subdomains (like `Book` in Catalog) may also expose getters when their role is primarily to store and retrieve data. The principle applies most strictly to **Core Domain aggregates with behavior** — these should never expose internal state that enables external decision-making.
+
+See: [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts) (Tell), [`book.entity.ts`](src/modules/catalog/domain/book/book.entity.ts) (pragmatic getters)
+
+### No Primitive Obsession
+
+> *"Use small objects to represent small concepts. [...] Don't represent a monetary amount by a Float, represent it as a Money type."*
+> - Martin Fowler, [Refactoring](https://martinfowler.com/books/refactoring.html)
+
+A `string` can be anything — an ISBN, an email, a SQL injection. A **Value Object** can only be what the domain allows. Wrapping primitives in domain types moves validation to the point of creation and makes illegal values unrepresentable.
+
+```typescript
+// ❌ Primitive: any string passes, validation scattered everywhere
+function borrowBook(memberId: string, bookId: string, loanId: string) { ... }
+
+// ✅ Value Object: validated once at creation, impossible to mix up
+function borrowBook(memberId: MemberId, bookReference: BookReference, loanId: LoanId) { ... }
+```
+
+In this codebase, **every domain concept is a type**: `ISBN`, `BookTitle`, `Author`, `MemberId`, `BorrowingLimit`, `LoanPeriod`... No raw `string` or `number` crosses a domain boundary. This eliminates an entire class of bugs (swapped arguments, invalid values, missing validation) and makes the code self-documenting — the type signature **is** the specification.
+
+See: [`isbn.vo.ts`](src/modules/catalog/domain/book/isbn.vo.ts), [`borrowing-limit.vo.ts`](src/modules/lending/domain/member/borrowing-limit.vo.ts), [`loan-period.vo.ts`](src/modules/lending/domain/loan/loan-period.vo.ts)
+
+### Always Valid
+
+> *"Not only are we saying that a constructor must always return a valid value, but also that it is not possible to change the value after that to make it invalid."*
+> - Greg Young, [Always Valid](https://codebetter.com/gregyoung/2009/05/22/always-valid/)
+
+A domain object should **never exist in an invalid state**. Validation happens at the only moment it can be enforced — construction. After that, immutability guarantees the object stays valid for its entire lifetime.
+
+This is enforced through three mechanisms working together:
+
+1. **Private constructor** — you can't `new ISBN(...)` from outside, bypassing validation
+2. **Factory method with validation** — `ISBN.create()` validates before calling the constructor
+3. **Immutability** — `private readonly` fields, no setters, no way to mutate after creation
+
+```typescript
+export class ISBN {
+  private constructor(private readonly _value: string) {}
+
+  static create(value: string): ISBN {
+    if (value.length !== 13) throw new ISBNMustBeExactly13Digits();
+    if (!isValidChecksum(value)) throw new ISBNChecksumIsInvalid();
+    return new ISBN(value);   // if we get here, it's valid — forever
+  }
+}
+```
+
+If you hold an `ISBN` instance, you **know** it's valid. No need to re-validate downstream, no defensive checks in services or repositories. The type system becomes a proof of validity.
+
+See: [`isbn.vo.ts`](src/modules/catalog/domain/book/isbn.vo.ts), [`member.entity.ts`](src/modules/lending/domain/member/member.entity.ts)
 
 ---
 
@@ -414,9 +506,9 @@ Behavior-oriented tests wired at the **use case** level. They use InMemory repos
 const { execute, repository } = new AddBookToCatalogTestBuilder()
   .withGeneratedId('book-42')
   .withIsbn('9780134685991')
-  .build(),
+  .build();
 
-const id = await execute(),
+const id = await execute();
 ```
 
 Each `.withXxx()` overrides only what matters for the test scenario.
@@ -439,36 +531,15 @@ One module = one Bounded Context. **No direct imports between modules.** `catalo
 
 ### Value Object Pattern
 
-```typescript
-export class ISBN {
-  private constructor(private readonly _value: string) {}  // private constructor
-  static create(value: string): ISBN { /* validate, then */ return new ISBN(value), }
-  get value(): string { return this._value, }
-  equals(other: ISBN): boolean { return this._value === other._value, }
-}
-```
+Private constructor + `create()` factory + `equals()`. See [Value Objects](#value-objects).
 
 ### Aggregate Pattern
 
-```typescript
-export class Book extends AggregateRoot {
-  private constructor(/* ... */) { super(), }            // private constructor
-  static register(/* ... */): Book { /* factory */ }     // domain verb as factory
-  // State changes via named behavior methods, not setters
-}
-```
+Private constructor + domain verb factory + behavior methods, no setters. See [Aggregates](#aggregates).
 
 ### Port Pattern (Repository Interfaces)
 
-Defined in the **domain layer**, parameters and returns typed with domain Value Objects, not primitives:
-
-```typescript
-export interface BooksRepository {
-  save(book: Book): Promise<void>,
-  findById(id: BookId): Promise<Book | null>,
-  findAll(): Promise<Book[]>,
-}
-```
+Defined in the **domain layer**, typed with Value Objects, not primitives. See [Ports](#ports-repository-interfaces).
 
 ---
 
@@ -584,3 +655,6 @@ This project is a **learning tool**, not a production application. Intentionally
 - Martin, R. C. (2017). *Clean Architecture: A Craftsman's Guide to Software Structure and Design*. Prentice Hall.
 - Vernon, V. (2013). *Implementing Domain-Driven Design*. Addison-Wesley.
 - Vernon, V. (2016). *Domain-Driven Design Distilled*. Addison-Wesley.
+- Fowler, M. (2018). *Refactoring: Improving the Design of Existing Code* (2nd ed.). Addison-Wesley.
+- Fowler, M. (2013). [Tell Don't Ask](https://martinfowler.com/bliki/TellDontAsk.html). martinfowler.com.
+- Young, G. (2009). [Always Valid](https://codebetter.com/gregyoung/2009/05/22/always-valid/). codebetter.com.
