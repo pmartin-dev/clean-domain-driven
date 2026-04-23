@@ -459,6 +459,8 @@ export interface BooksRepository {
 
 ```
 src/
+├── main.ts                                 # Application entry point (composition root)
+├── app.module.ts                           # Root module (wires all bounded contexts)
 ├── shared/
 │   ├── domain/                             # Base classes & ports shared across BCs
 │   │   ├── domain-event.ts                 # Abstract DomainEvent (immutable)
@@ -474,8 +476,6 @@ src/
 │       ├── system-clock.ts                 # ClockInterface implementation
 │       ├── id-generator.ts                 # IdGeneratorInterface implementation (UUID v7)
 │       └── nestjs/
-│           ├── main.ts                     # Application entry point
-│           ├── app.module.ts               # Root module
 │           ├── shared.module.ts            # @Global module (Clock, IdGenerator, EventDispatcher)
 │           ├── injection-tokens.ts
 │           ├── pipes/

@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { DomainExceptionFilter } from './filters/domain-exception.filter.js';
+import { DomainExceptionFilter } from '@shared/infrastructure/nestjs/filters/domain-exception.filter.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

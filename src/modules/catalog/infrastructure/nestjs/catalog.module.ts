@@ -14,9 +14,8 @@ import { OnBookBorrowedHandler } from '@catalog/application/event-handlers/on-bo
 import { OnBookReturnedHandler } from '@catalog/application/event-handlers/on-book-returned.handler';
 import { BooksRepository } from '@catalog/domain/book/books-repository.interface';
 import { BorrowedBookRegistry } from '@catalog/domain/book/borrowed-book-registry.interface';
-import { SubscribableEventDispatcher } from '@shared/domain/event-dispatcher.interface';
+import { SubscribableEventDispatcher, EventDispatcherInterface } from '@shared/domain/event-dispatcher.interface';
 import { IdGeneratorInterface } from '@shared/domain/id-generator';
-import { EventDispatcherInterface } from '@shared/domain/event-dispatcher.interface';
 import { BOOK_BORROWED, BOOK_RETURNED } from '@shared/domain/domain-events';
 import { CatalogController } from './catalog.controller.js';
 
