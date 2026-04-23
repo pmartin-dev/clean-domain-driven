@@ -14,6 +14,9 @@ A production-ready reference implementation of Domain-Driven Design with Clean A
 ## Table of Contents
 
 - [Problem Space](#problem-space)
+  - [Subdomain Types](#subdomain-types)
+  - [Our Subdomains](#our-subdomains)
+  - [Business Problems](#business-problems)
 - [Solution Space](#solution-space)
   - [From User Stories to Code](#from-user-stories-to-code)
   - [Strategic Design](#strategic-design)
@@ -34,6 +37,16 @@ A production-ready reference implementation of Domain-Driven Design with Clean A
 Before writing any code, DDD starts by understanding the **business domain**.
 
 Our domain is a **municipal library** that manages its book catalog and loans to members.
+
+### Subdomain Types
+
+In DDD, there are three types of subdomains:
+
+- **Core Domain** — The most strategic and differentiating part of the system. It contains the most complex business logic, the one that truly creates product value and gives a competitive advantage. This is where we invest the most: rich model, precise ubiquitous language, explicit rules.
+- **Supporting Domain** — Contains real business logic, but is not differentiating. These subdomains support the Core without offering a competitive advantage on their own. The modeling can remain simpler — often CRUDs or ETLs are sufficient.
+- **Generic Domain** — Groups standard features found in almost every system: authentication, email sending, notifications, reporting, payment processing. The idea here is not to model in depth, but to reuse existing solutions (libraries, third-party services, SaaS). Full DDD modeling on this type would be disproportionate.
+
+### Our Subdomains
 
 | Subdomain | Type | Description |
 |---|---|---|
@@ -273,6 +286,8 @@ Interface (NestJS controllers)                ← calls application layer
 
 **Domain First:** the domain was developed in isolation: pure TypeScript, zero framework imports. NestJS was added **after** the domain was stabilized and tested. This means you can change the framework, database or deployment without touching a single line of domain code.
 
+**Dependency Inversion Principle (DIP):** High-level layers (domain, application) never depend on low-level layers (infrastructure). Instead, the domain defines abstractions — repository interfaces, event dispatchers, clocks — and the infrastructure provides concrete implementations. This is why NestJS wiring uses factory providers: the framework satisfies contracts defined by the domain, not the other way around. The same principle applies to use case inputs: Commands and Queries are defined by the application layer, and controllers conform to them.
+
 **Why no Presenter?** Domain-to-response mappings are trivial, so use cases return DTOs directly, a Presenter layer would add indirection without value.
 
 See: [`domain/`](src/modules/catalog/domain/), [`application/`](src/modules/catalog/application/), [`infrastructure/`](src/modules/catalog/infrastructure/)
@@ -286,6 +301,8 @@ Clean Architecture and CQS operate at different levels:
 - **CQS** structures **intent**, separating writes (commands) from reads (queries)
 
 The separation is **structural**, expressed through folder organization and naming conventions, not runtime. There is no command bus or query bus: controllers inject use cases directly via NestJS dependency injection.
+
+Commands and Queries are **classes**, not interfaces, because TypeScript interfaces are erased at compile time. Classes exist at runtime, which means they can serve as routing tokens if a command/query bus is introduced later. Even without a bus today, classes also allow carrying constructor logic (validation, defaults) — something interfaces cannot do.
 
 ```
 application/
