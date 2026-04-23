@@ -354,7 +354,26 @@ Each NestJS module subscribes its event handlers to the shared `DomainEventDispa
 | POST | `/lending/loans/:loanId/return` | Return a book |
 | GET | `/lending/members/:memberId/loans` | List a member's active loans |
 
-Domain exceptions are caught by a global `DomainExceptionFilter` and returned as HTTP 400 responses.
+### Input Validation
+
+Validation is split into two layers, each with a distinct responsibility:
+
+| Layer | Tool | Responsibility | HTTP Status |
+|-------|------|----------------|-------------|
+| **HTTP boundary** | Zod schemas | Structural validation: "Is this request well-formed?" (missing fields, wrong types) | **422** |
+| **Domain** | Value Objects, Rules | Business invariant validation: "Can this object exist in this state?" (ISBN checksum, borrowing limit) | **400** |
+
+Zod schemas live in `infrastructure/nestjs/` alongside controllers. They validate **structure only** and never duplicate domain rules. Commands and Queries remain pure POJOs with no library coupling.
+
+A reusable `ZodValidationPipe` applies schemas declaratively via NestJS decorators (`@Body(new ZodValidationPipe(schema))`). The pipe catches `ZodError` and throws a NestJS `UnprocessableEntityException` with per-field error details.
+
+Zod implements the [Standard Schema](https://github.com/standard-schema/standard-schema) interface, which NestJS v12 will support natively — migration will be a matter of replacing `@Body(new ZodValidationPipe(schema))` with NestJS's built-in `@Body(schema)` decorator.
+
+See: [`catalog.schemas.ts`](src/modules/catalog/infrastructure/nestjs/catalog.schemas.ts), [`lending.schemas.ts`](src/modules/lending/infrastructure/nestjs/lending.schemas.ts), [`zod-validation.pipe.ts`](src/shared/infrastructure/nestjs/pipes/zod-validation.pipe.ts)
+
+### Error Handling
+
+Domain exceptions are caught by a global `DomainExceptionFilter` and returned as HTTP 400 responses. Structural validation errors are caught by the `ZodValidationPipe` and returned as HTTP 422 responses with per-field details.
 
 See: [`catalog.controller.ts`](src/modules/catalog/infrastructure/nestjs/catalog.controller.ts), [`lending.controller.ts`](src/modules/lending/infrastructure/nestjs/lending.controller.ts), [`catalog.module.ts`](src/modules/catalog/infrastructure/nestjs/catalog.module.ts), [`lending.module.ts`](src/modules/lending/infrastructure/nestjs/lending.module.ts), [`shared.module.ts`](src/shared/infrastructure/nestjs/shared.module.ts)
 
@@ -459,6 +478,8 @@ src/
 │           ├── app.module.ts               # Root module
 │           ├── shared.module.ts            # @Global module (Clock, IdGenerator, EventDispatcher)
 │           ├── injection-tokens.ts
+│           ├── pipes/
+│           │   └── zod-validation.pipe.ts      # Zod schema → 422 on invalid input
 │           └── filters/
 │               └── domain-exception.filter.ts  # DomainException → HTTP 400
 │
@@ -484,6 +505,7 @@ src/
     │   │   └── nestjs/                     # NestJS wiring
     │   │       ├── catalog.module.ts       # Providers, event subscriptions
     │   │       ├── catalog.controller.ts   # REST endpoints (injects use cases directly)
+    │   │       ├── catalog.schemas.ts      # Zod input validation schemas
     │   │       └── injection-tokens.ts
     │   └── tests/ (unit/ + functional/)
     │
@@ -520,6 +542,7 @@ src/
         │   └── nestjs/                     # NestJS wiring
         │       ├── lending.module.ts       # Providers, event subscriptions
         │       ├── lending.controller.ts   # REST endpoints (injects use cases directly)
+        │       ├── lending.schemas.ts      # Zod input validation schemas
         │       └── injection-tokens.ts
         └── tests/ (unit/ + functional/)
 ```
